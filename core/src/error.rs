@@ -1,0 +1,44 @@
+pub type Result<T> = core::result::Result<T, Error>;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Error {
+    // Call Errors
+    CallValueTooLarge,
+    CallValueTooSmall,
+    // Hand Errors
+    HandIsFull,
+    HandHasCardAlready,
+    HandDoesNotHaveThisCard,
+    // Player Errors
+    PlayerAlreadyCalled,
+    TurnIsAlreadySet,
+    // Round Errors
+    AllCallsNeededBeforeAnyPlay,
+    RoundIsOver,
+    PlayerCalledOutOfTurn,
+    PlayerPlayedOutOfTurn,
+    // Trick Errors
+    TrickNotInitialized,
+    InvalidPlay,
+    TrickIsFull,
+    NoTrickWinnerYet,
+    // Turn Errors
+    InvalidValueForTurn,
+    // Game Errors,
+    GameHasMaxPossiblePlayers,
+    NotEnoughPlayers,
+    PlayerAlreadyInGame,
+    PlayerNotInGame,
+    RoundIsNotOver,
+    GameOver,
+    // Miscellaneous
+    ImpossibleCondition,
+}
+
+impl std::error::Error for Error {}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
