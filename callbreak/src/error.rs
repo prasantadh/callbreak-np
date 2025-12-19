@@ -24,7 +24,11 @@ pub enum Error {
     NoTrickWinnerYet,
     // Turn Errors
     InvalidValueForTurn,
+    NotYourTurn,
     // Game Errors,
+    NotAcceptingNewPlayers,
+    NotAcceptingCalls,
+    NotAcceptingPlay,
     GameHasMaxPossiblePlayers,
     NotEnoughPlayers,
     PlayerAlreadyInGame,

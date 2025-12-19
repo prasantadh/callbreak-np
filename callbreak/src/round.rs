@@ -3,65 +3,74 @@ use crate::{Error, Result};
 use deck::{Card, Deck};
 
 use serde::Serialize;
-use std::vec;
+use std::{array, vec};
 
 #[derive(Debug, Clone, Serialize)]
-pub struct Round {
+pub(crate) struct Round {
     starter: Turn,
-    hands: Vec<Hand>,
-    calls: Vec<Option<Call>>,
+    hands: [Hand; 4],
+    calls: [Option<Call>; 4],
     tricks: Vec<Trick>,
 }
 
+enum State {
+    Calling,
+    TrickInProgress,
+}
+
 impl Round {
+    fn state(&self) -> State {
+        if self.calls.iter().any(|call| call.is_none()) {
+            State::Calling
+        } else {
+            State::TrickInProgress
+        }
+    }
+
     pub(crate) fn new(starter: Turn) -> Self {
-        let mut hands;
         loop {
             let deck = Deck::new();
-            hands = vec![Hand::new(); 4];
-            let mut current = 0;
+            let mut hands = array::from_fn(|_| Hand::new());
+            let mut turn = Turn::new(0).expect("0 must be a valid turn");
+            // let mut current = 0;
             for card in deck {
-                // this unwrap looks bad but also should never fault
-                hands[current].add_card(card).unwrap();
-                current = (current + 1) % 4;
+                hands[turn]
+                    .add_card(card)
+                    .expect("hands must have enough space for cards");
+                turn = turn.next();
             }
             if hands.iter().all(|hand| hand.is_valid()) {
-                break;
+                return Round {
+                    starter,
+                    hands,
+                    calls: [None; 4],
+                    tricks: vec![],
+                };
             }
-        }
-
-        Round {
-            starter,
-            hands,
-            calls: vec![None; 4],
-            tricks: vec![],
         }
     }
 
     pub(crate) fn call(&mut self, call: Call, turn: Turn) -> Result<()> {
-        let mut starter = self.starter;
-        // all calls up to that point must be None
-
-        while starter != turn {
-            if self.calls[starter].is_none() {
-                return Err(Error::PlayerCalledOutOfTurn);
+        match self.state() {
+            State::Calling => {
+                // find who is next
+                let mut next = self.starter;
+                for _ in 0..4 {
+                    if self.calls[next].is_none() {
+                        break;
+                    }
+                    next = next.next();
+                }
+                // set the call
+                if next != turn || self.calls[turn].is_some() {
+                    Err(Error::NotYourTurn)
+                } else {
+                    self.calls[turn] = Some(call);
+                    Ok(())
+                }
             }
-            starter = starter.next()
+            _ => Err(Error::NotAcceptingCalls),
         }
-
-        // the call for requested turn must be None
-        if self.calls[turn].is_some() {
-            return Err(Error::PlayerAlreadyCalled);
-        }
-
-        // set the value
-        self.calls[turn] = Some(call);
-
-        // initialize a trick if all calls have been made
-        if self.calls.iter().all(|v| v.is_some()) {
-            self.tricks.push(Trick::new(self.starter));
-        }
-        Ok(())
     }
 
     pub(crate) fn current(&self) -> Result<Turn> {

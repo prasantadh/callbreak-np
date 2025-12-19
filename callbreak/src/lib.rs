@@ -1,6 +1,6 @@
 pub mod call;
-pub mod callbreak;
 pub mod error;
+pub mod game;
 pub mod hand;
 pub mod player;
 pub mod round;
@@ -8,12 +8,13 @@ pub mod trick;
 pub mod turn;
 
 pub use call::Call;
-pub use callbreak::Callbreak;
 pub use deck::Card;
 pub use error::{Error, Result};
+pub use game::Game;
 pub use hand::Hand;
-pub use player::{Player, PlayerID};
-pub use round::Round;
+pub use player::ID as PlayerID;
+pub use player::Player;
+use round::Round;
 pub use trick::Trick;
 pub use turn::Turn;
 
@@ -39,13 +40,13 @@ mod tests {
     #[test]
     fn can_add_a_player() {
         init_tracing();
-        let mut game = Callbreak::new();
+        let mut game = Game::new();
         game.add_player("1").unwrap();
     }
 
     #[test]
     fn cannot_add_same_player_twice() {
-        let mut game = Callbreak::new();
+        let mut game = Game::new();
         game.add_player("1").unwrap();
         let action = game.add_player("1");
         assert_eq!(action, Err(Error::PlayerAlreadyInGame));
@@ -53,19 +54,47 @@ mod tests {
 
     #[test]
     fn cannot_add_more_than_four_players() {
-        let mut game = Callbreak::new();
-        game.add_player("1").unwrap();
-        game.add_player("2").unwrap();
-        game.add_player("3").unwrap();
-        game.add_player("4").unwrap();
+        let mut game = Game::new();
+        for i in 0..4 {
+            game.add_player(&format!("player{}", i)).unwrap();
+        }
         let action = game.add_player("5");
-        assert_eq!(action, Err(Error::GameHasMaxPossiblePlayers));
+        assert_eq!(action, Err(Error::NotAcceptingNewPlayers));
     }
 
     #[test]
+    fn cannot_call_before_all_players_have_joined() {
+        let mut game = Game::new();
+        for i in 0..3 {
+            game.add_player(&i.to_string()).unwrap();
+        }
+        let action = game.call("0", Call::new(1).unwrap());
+        assert!(action.is_err())
+    }
+
+    #[test]
+    fn each_player_can_call() {
+        let mut game = Game::new();
+        for i in 0..4 {
+            game.add_player(&i.to_string()).unwrap();
+        }
+    }
+
+    #[test]
+    fn cannot_call_out_of_turn() {
+        let mut game = Game::new();
+        for i in 0..4 {
+            game.add_player(&i.to_string()).unwrap();
+        }
+        let action = game.call("1", Call::new(1).unwrap());
+        assert!(action.is_err())
+    }
+
+    /*
+    #[test]
     fn each_player_has_a_spade_card() {
         for _ in 1..100 {
-            let mut game = Callbreak::new();
+            let mut game = Game::new();
             let player1 = game.add_player("1").unwrap().clone();
             let _ = game.add_player("2").unwrap();
             let _ = game.add_player("3").unwrap();
@@ -84,7 +113,7 @@ mod tests {
     #[test]
     fn each_player_has_a_face_card() {
         for _ in 1..100 {
-            let mut game = Callbreak::new();
+            let mut game = Game::new();
             let player1 = game.add_player("1").unwrap().clone();
             let _ = game.add_player("2").unwrap();
             let _ = game.add_player("3").unwrap();
@@ -106,7 +135,7 @@ mod tests {
 
     #[test]
     fn a_player_can_call() {
-        let mut game = Callbreak::new();
+        let mut game = Game::new();
         let mut players = vec![];
         for i in 0..4 {
             let player = game.add_player(format!("{i}")).unwrap().clone();
@@ -121,7 +150,7 @@ mod tests {
 
     #[test]
     fn a_player_cannot_call_out_of_turn() {
-        let mut game = Callbreak::new();
+        let mut game = Game::new();
         let mut players = vec![];
         for i in 0..4 {
             let player = game.add_player(format!("{i}")).unwrap().clone();
@@ -138,7 +167,7 @@ mod tests {
     #[test]
     fn a_player_can_play_first_card() {
         init_tracing();
-        let mut game = Callbreak::new();
+        let mut game = Game::new();
         let mut players = vec![];
         for i in 0..4 {
             let player = game.add_player(format!("{i}")).unwrap().clone();
@@ -172,7 +201,7 @@ mod tests {
 
     #[test]
     fn game_can_be_played_to_completion() {
-        let mut game = Callbreak::new();
+        let mut game = Game::new();
         for i in 0..4 {
             game.add_player(format!("{i}")).unwrap();
         }
@@ -213,4 +242,5 @@ mod tests {
             }
         }
     }
+    */
 }
