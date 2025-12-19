@@ -1,9 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use std::rc::Rc;
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PlayerID(Rc<str>);
+pub struct PlayerID(String);
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct Player {
@@ -21,7 +19,7 @@ impl Player {
     }
 }
 
-impl<S: Into<Rc<str>>> From<S> for PlayerID {
+impl<S: Into<String>> From<S> for PlayerID {
     fn from(value: S) -> Self {
         PlayerID(value.into())
     }

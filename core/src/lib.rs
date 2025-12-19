@@ -194,6 +194,7 @@ mod tests {
                 game.call(&player, Call::new(3).unwrap()).unwrap();
             }
 
+            println!("{}", serde_json::to_string_pretty(&game).unwrap());
             // for thirteen tricks, when it is your turn, play something
             for trick in 0..13 {
                 for turn in 0..4 {

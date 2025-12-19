@@ -20,7 +20,7 @@ pub enum Error {
     // Trick Errors
     TrickNotInitialized,
     InvalidPlay,
-    TrickIsFull,
+    TrickIsOver,
     NoTrickWinnerYet,
     // Turn Errors
     InvalidValueForTurn,

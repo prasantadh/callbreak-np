@@ -83,28 +83,6 @@ impl Round {
             .current()
     }
 
-    fn push_tricks_if_none_or_full(&mut self) -> Result<()> {
-        // there are no tricks, need the first one
-        let trick = match self.tricks.last() {
-            Some(v) => v,
-            None => {
-                self.tricks.push(Trick::new(self.starter));
-                self.tricks.last().ok_or(Error::ImpossibleCondition)?
-            }
-        };
-
-        // the last trick is full, need new one
-        if trick.is_full() {
-            if self.tricks.len() == 13 {
-                return Err(Error::RoundIsOver);
-            } else {
-                let trick = Trick::new(trick.winning_turn()?);
-                self.tricks.push(trick);
-            }
-        }
-        Ok(())
-    }
-
     pub(crate) fn current_trick(&self) -> Result<&Trick> {
         match self.tricks.last() {
             None => Err(Error::TrickNotInitialized),
@@ -138,7 +116,7 @@ impl Round {
         {
             // if trick is full but round is not over, add another trick
             let trick = self.tricks.last().ok_or(Error::TrickNotInitialized)?;
-            if trick.is_full() && self.tricks.len() != 13 {
+            if self.tricks.len() != 13 && trick.current().is_err() {
                 self.tricks.push(Trick::new(trick.winning_turn()?));
             }
         }
@@ -146,7 +124,7 @@ impl Round {
     }
 
     pub(crate) fn is_over(&self) -> bool {
-        self.tricks.len() == 13 && self.tricks.last().is_some_and(|t| t.is_full())
+        self.tricks.len() == 13 && self.tricks.last().is_some_and(|t| t.current().is_err())
     }
 
     pub(crate) fn get_hand(&self, turn: Turn) -> &Hand {

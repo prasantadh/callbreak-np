@@ -7,43 +7,40 @@ use crate::{Error, Result};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Trick {
-    // TODO: might be prudent to rename this into starter_turn
-    // and starter() into starter_card
-    starter: Turn,
-    cards: Vec<Option<Card>>,
+    starter_turn: Turn,
+    cards: [Option<Card>; 4],
 }
 
 impl Trick {
-    pub fn new(starter: Turn) -> Self {
+    // TODO: is it nicer to also take a [Option<Card>; 4]
+    // so that we can verify stuff like [None, Some(), None, Some()]
+    // during deserialization, which should not happen
+    pub(crate) fn new(starter: Turn) -> Self {
         println!("trick setup with starter: {starter:?}");
         Trick {
-            starter,
-            cards: vec![None; 4],
+            starter_turn: starter,
+            cards: [None; 4],
         }
     }
 
-    pub fn add_card(&mut self, card: Card) -> Result<()> {
+    pub(crate) fn add_card(&mut self, card: Card) -> Result<()> {
         let current = self.current()?;
         self.cards[current] = Some(card);
         Ok(())
     }
 
-    pub fn current(&self) -> Result<Turn> {
-        let mut current = self.starter;
+    pub(crate) fn current(&self) -> Result<Turn> {
+        let mut current = self.starter_turn;
         for _ in 0..self.cards.len() {
             if self.cards[current].is_none() {
                 return Ok(current);
             }
             current = current.next();
         }
-        Err(Error::TrickIsFull)
+        Err(Error::TrickIsOver)
     }
 
-    pub fn is_full(&self) -> bool {
-        self.cards.iter().all(|v| v.is_some())
-    }
-
-    pub fn winning_card(&self) -> Result<Card> {
+    fn winning_card(&self) -> Result<Card> {
         let mut winner = self.starting_card().ok_or(Error::NoTrickWinnerYet)?;
         for card in self.cards.iter().flatten() {
             if (winner.get_suit() != Suit::Spades && card.get_suit() == Suit::Spades)
@@ -55,7 +52,7 @@ impl Trick {
         Ok(winner)
     }
 
-    pub fn winning_turn(&self) -> Result<Turn> {
+    pub(crate) fn winning_turn(&self) -> Result<Turn> {
         let winner = self.winning_card()?;
         // if there is a winning_card there must be a winning turn
         if let Some(position) = self.cards.iter().position(|c| *c == Some(winner)) {
@@ -64,21 +61,11 @@ impl Trick {
         Err(Error::NoTrickWinnerYet)
     }
 
-    pub fn starting_card(&self) -> Option<Card> {
-        self.cards[self.starter]
+    fn starting_card(&self) -> Option<Card> {
+        self.cards[self.starter_turn]
     }
 
-    pub fn starting_turn(&self) -> Turn {
-        self.starter
-    }
-
-    pub fn get_turn_from_card(&self, card: Card) -> Option<Turn> {
-        if let Some(position) = self.cards.iter().position(|c| *c == Some(card)) {
-            return Some(Turn::new(position).unwrap());
-        }
-        None
-    }
-
+    // TODO: look into if this must return a vector
     pub(crate) fn valid_from_hand(&self, hand: &Hand) -> Result<Vec<Card>> {
         let starter = match self.starting_card() {
             None => return Ok(hand.get_cards().to_vec()),
