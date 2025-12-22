@@ -3,25 +3,33 @@ use crate::{Error, Result};
 use deck::{Card, Deck};
 
 use serde::Serialize;
-use std::{array, vec};
+use std::array;
 
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct Round {
     starter: Turn,
     hands: [Hand; 4],
     calls: [Option<Call>; 4],
-    tricks: Vec<Trick>,
+    tricks: [Option<Trick>; 13],
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 enum State {
     Calling,
     TrickInProgress,
+    Over,
 }
 
 impl Round {
     fn state(&self) -> State {
         if self.calls.iter().any(|call| call.is_none()) {
             State::Calling
+        } else if self
+            .tricks
+            .last()
+            .is_some_and(|t| t.as_ref().unwrap().is_over())
+        {
+            State::Over
         } else {
             State::TrickInProgress
         }
@@ -31,8 +39,7 @@ impl Round {
         loop {
             let deck = Deck::new();
             let mut hands = array::from_fn(|_| Hand::new());
-            let mut turn = Turn::new(0).expect("0 must be a valid turn");
-            // let mut current = 0;
+            let mut turn = Turn::new(0);
             for card in deck {
                 hands[turn]
                     .add_card(card)
@@ -44,7 +51,7 @@ impl Round {
                     starter,
                     hands,
                     calls: [None; 4],
-                    tricks: vec![],
+                    tricks: array::from_fn(|_| None),
                 };
             }
         }
@@ -55,14 +62,13 @@ impl Round {
             State::Calling => {
                 // find who is next
                 let mut next = self.starter;
-                for _ in 0..4 {
-                    if self.calls[next].is_none() {
-                        break;
-                    }
+                while self.calls[next].is_some() {
+                    // loop must terminate because it is calling
                     next = next.next();
                 }
+
                 // set the call
-                if next != turn || self.calls[turn].is_some() {
+                if next != turn {
                     Err(Error::NotYourTurn)
                 } else {
                     self.calls[turn] = Some(call);
@@ -73,74 +79,53 @@ impl Round {
         }
     }
 
-    pub(crate) fn current(&self) -> Result<Turn> {
-        let not_all_called = self.calls.iter().any(|v| v.is_none());
-        if not_all_called {
-            let mut starter = self.starter;
-            loop {
-                let turn = starter;
-                if self.calls[turn].is_none() {
-                    return Ok(turn);
-                }
-                starter = starter.next();
-            }
-        }
-
-        self.tricks
-            .last()
-            .ok_or(Error::TrickNotInitialized)?
-            .current()
-    }
-
-    pub(crate) fn current_trick(&self) -> Result<&Trick> {
-        match self.tricks.last() {
-            None => Err(Error::TrickNotInitialized),
-            Some(trick) => Ok(trick),
-        }
-    }
-
-    pub(crate) fn all_called(&self) -> bool {
-        self.calls.iter().all(|v| v.is_some())
-    }
-
     pub(crate) fn play(&mut self, card: Card, turn: Turn) -> Result<()> {
-        if !self.all_called() {
-            return Err(Error::AllCallsNeededBeforeAnyPlay);
-        }
-
-        if turn != self.current()? {
-            return Err(Error::PlayerPlayedOutOfTurn);
-        }
-
-        {
-            // add the card to the trick
-            let trick = self.tricks.last_mut().ok_or(Error::TrickNotInitialized)?;
-            let hand = &self.hands[turn];
-            let valid_moves = trick.valid_from_hand(hand)?;
-            if !valid_moves.contains(&card) {
-                return Err(Error::InvalidPlay);
+        match self.state() {
+            State::TrickInProgress => {
+                // is there a trick that is currently running and not full?
+                // yes, play into that. else start a new trick
+                if let Some(trick) = self
+                    .tricks
+                    .iter_mut()
+                    .rev()
+                    .find_map(|t| t.as_mut())
+                    .filter(|trick| !trick.is_over())
+                {
+                    let next = trick.next()?;
+                    if next != turn {
+                        Err(Error::NotYourTurn)
+                    } else {
+                        trick.play(card, &mut self.hands[next])
+                    }
+                } else {
+                    let slot = self
+                        .tricks
+                        .iter()
+                        .position(|trick| trick.is_none())
+                        .expect("must have available trick when round is not over");
+                    // winner from last round or the starter of this round
+                    let next = if slot == 0 {
+                        self.starter
+                    } else {
+                        self.tricks[slot - 1]
+                            .as_ref()
+                            .expect("must have last trick initialized")
+                            .winner()
+                            .expect("must have winner for the last trick")
+                            .0
+                    };
+                    self.tricks[slot] = Some(Trick::new(next));
+                    self.tricks[slot]
+                        .as_mut()
+                        .expect("just initialized trick must be available")
+                        .play(card, &mut self.hands[next])
+                }
             }
-            trick.add_card(card)?;
+            _ => Err(Error::NotAcceptingPlay),
         }
-        {
-            // if trick is full but round is not over, add another trick
-            let trick = self.tricks.last().ok_or(Error::TrickNotInitialized)?;
-            if self.tricks.len() != 13 && trick.current().is_err() {
-                self.tricks.push(Trick::new(trick.winning_turn()?));
-            }
-        }
-        Ok(())
     }
 
     pub(crate) fn is_over(&self) -> bool {
-        self.tricks.len() == 13 && self.tricks.last().is_some_and(|t| t.current().is_err())
-    }
-
-    pub(crate) fn get_hand(&self, turn: Turn) -> &Hand {
-        &self.hands[turn]
-    }
-
-    pub(crate) fn get_calls(&self) -> &[Option<Call>] {
-        &self.calls
+        self.state() == State::Over
     }
 }

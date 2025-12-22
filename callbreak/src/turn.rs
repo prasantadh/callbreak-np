@@ -1,5 +1,3 @@
-use crate::{Error, Result};
-
 use serde::{Deserialize, Serialize};
 use std::ops::{Index, IndexMut};
 
@@ -10,11 +8,8 @@ pub struct Turn(usize);
 const MAX_TURN: usize = 3;
 
 impl Turn {
-    pub fn new(value: usize) -> Result<Self> {
-        if value > MAX_TURN {
-            return Err(Error::InvalidValueForTurn);
-        }
-        Ok(Turn(value))
+    pub fn new(value: usize) -> Self {
+        Turn(value % 4)
     }
 
     pub fn next(&self) -> Self {

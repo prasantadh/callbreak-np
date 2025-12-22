@@ -1,17 +1,12 @@
-use std::hint::select_unpredictable;
-
 use crate::Call;
 use crate::Card;
-use crate::Hand;
 use crate::Round;
-use crate::Trick;
 use crate::Turn;
 use crate::{Error, Result};
 use crate::{Player, PlayerID};
 
 use rand::{rng, seq::SliceRandom};
 use serde::Serialize;
-use tracing::info;
 
 #[derive(Debug, Default, Clone, Serialize)]
 pub struct Game {
@@ -61,6 +56,10 @@ impl Game {
                         .find(|slot| slot.is_none())
                         .expect("an empty slot is expected in the Lobby")
                         .replace(Player::new(id));
+                    if self.state() == State::RoundInProgress {
+                        let mut rng = rng();
+                        self.players.shuffle(&mut rng);
+                    }
                     Ok(())
                 }
             }
@@ -77,7 +76,7 @@ impl Game {
                     .flatten()
                     .position(|player| player.get_id() == player_id)
                 {
-                    Turn::new(turn)
+                    Ok(Turn::new(turn))
                 } else {
                     Err(Error::PlayerNotInGame)
                 }
@@ -106,14 +105,10 @@ impl Game {
                         .iter()
                         .position(|r| r.is_none())
                         .expect("must have available round when the game is not over");
-                    // FIXME: feels like Turn can just return Self and not Result<Self>
-                    // so we could create turn from any usize actually. right now
-                    // it will crash everything so letting it pass
-                    let starter = Turn::new(slot % 4).expect("must be a valid turn");
-                    self.rounds[slot] = Some(Round::new(starter));
+                    self.rounds[slot] = Some(Round::new(Turn::new(slot)));
                     self.rounds[slot]
                         .as_mut()
-                        .expect("just initialized round is available")
+                        .expect("just initialized round must be available")
                         .call(call, turn)
                 }
             }
@@ -134,27 +129,4 @@ impl Game {
             _ => Err(Error::NotAcceptingPlay),
         }
     }
-
-    /*
-    pub fn get_valid_play(&self, player: &Player) -> Result<Vec<Card>> {
-        // send the cards that are valid for the player play
-        // in the current round
-        let turn = self.get_turn(player)?;
-        let current = self.current()?;
-        println!(
-            "get_valid_play: {player:?} of {turn:?} attempting move while current {current:?}"
-        );
-        if turn != current {
-            return Err(Error::PlayerPlayedOutOfTurn);
-        }
-        match self.rounds.last() {
-            None => Err(Error::NotEnoughPlayers),
-            Some(round) => {
-                let trick = round.current_trick()?;
-                let valids = trick.valid_from_hand(self.get_hand(player)?)?;
-                Ok(valids)
-            }
-        }
-    }
-    */
 }

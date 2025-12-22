@@ -14,7 +14,8 @@ pub struct Trick {
 impl Trick {
     // TODO: is it nicer to also take a [Option<Card>; 4]
     // so that we can verify stuff like [None, Some(), None, Some()]
-    // during deserialization, which should not happen
+    // during deserialization, which should not happen.
+    // on second thought, why should this support deserialization at all?!
     pub(crate) fn new(starter: Turn) -> Self {
         println!("trick setup with starter: {starter:?}");
         Trick {
@@ -23,48 +24,127 @@ impl Trick {
         }
     }
 
-    pub(crate) fn add_card(&mut self, card: Card) -> Result<()> {
-        let current = self.current()?;
-        self.cards[current] = Some(card);
-        Ok(())
+    pub(crate) fn play(&mut self, card: Card, hand: &mut Hand) -> Result<()> {
+        let valid_moves = self.valid_play_from(hand);
+        if valid_moves.contains(&card) {
+            let next = self.next()?;
+            hand.play(card)?;
+            self.cards[next] = Some(card);
+            Ok(())
+        } else {
+            Err(Error::InvalidPlay)
+        }
     }
 
-    pub(crate) fn current(&self) -> Result<Turn> {
-        let mut current = self.starter_turn;
-        for _ in 0..self.cards.len() {
-            if self.cards[current].is_none() {
-                return Ok(current);
+    pub(crate) fn next(&self) -> Result<Turn> {
+        if self.is_over() {
+            Err(Error::NotAcceptingPlay)
+        } else {
+            let mut turn = self.starter_turn;
+            while self.cards[turn].is_some() {
+                // this loop must terminate because the trick is not over
+                turn = turn.next();
             }
-            current = current.next();
+            Ok(turn)
         }
-        Err(Error::TrickIsOver)
     }
 
-    fn winning_card(&self) -> Result<Card> {
-        let mut winner = self.starting_card().ok_or(Error::NoTrickWinnerYet)?;
-        for card in self.cards.iter().flatten() {
-            if (winner.get_suit() != Suit::Spades && card.get_suit() == Suit::Spades)
-                || (card.get_suit() == winner.get_suit() && card.get_rank() > winner.get_rank())
-            {
-                winner = *card;
+    pub(crate) fn is_over(&self) -> bool {
+        self.cards.iter().all(|c| c.is_some())
+    }
+
+    pub(crate) fn starter(&self) -> (Turn, Option<Card>) {
+        (self.starter_turn, self.cards[self.starter_turn])
+    }
+
+    pub(crate) fn winner(&self) -> Option<(Turn, Card)> {
+        // if there is a spade card, return the max spade card by rank
+        // else return the max ranked card of the starter suit
+        match self.starter() {
+            (_, None) => None,
+            (_, Some(starter)) => {
+                let winning_suit = if self
+                    .cards
+                    .iter()
+                    .flatten()
+                    .any(|card| card.get_suit() == Suit::Spades)
+                {
+                    Suit::Spades
+                } else {
+                    starter.get_suit()
+                };
+                let winner = self
+                    .cards
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, opt)| opt.as_ref().map(|card| (i, card)))
+                    .filter(|(_, card)| card.get_suit() == winning_suit)
+                    .max_by_key(|(_, card)| card.get_rank())
+                    .expect("must have a winner");
+                Some((Turn::new(winner.0), *winner.1))
             }
         }
-        Ok(winner)
     }
 
-    pub(crate) fn winning_turn(&self) -> Result<Turn> {
-        let winner = self.winning_card()?;
-        // if there is a winning_card there must be a winning turn
-        if let Some(position) = self.cards.iter().position(|c| *c == Some(winner)) {
-            return Turn::new(position);
+    fn valid_play_from(&self, hand: &Hand) -> Vec<Card> {
+        let starter = if let (_, Some(card)) = self.starter() {
+            card
+        } else {
+            return vec![];
+        };
+        let winner = self
+            .winner()
+            .expect("must have a winner when there is a starter")
+            .1;
+
+        let candidates = match (starter.get_suit(), winner.get_suit()) {
+            (s, w) if s == w => [
+                hand.get_cards()
+                    .iter()
+                    .filter(|card| card.get_suit() == s && card.get_rank() > winner.get_rank())
+                    .cloned()
+                    .collect::<Vec<Card>>(),
+                hand.get_cards()
+                    .iter()
+                    .filter(|card| card.get_suit() == s)
+                    .cloned()
+                    .collect::<Vec<Card>>(),
+                // if s = spades this is already handled above but simplifies code for other suits
+                hand.get_cards()
+                    .iter()
+                    .filter(|card| card.get_suit() == Suit::Spades)
+                    .cloned()
+                    .collect::<Vec<Card>>(),
+                hand.get_cards().to_vec(),
+            ],
+            (s, w) if s != w => [
+                // implies w == Spades and s!= Spades
+                hand.get_cards()
+                    .iter()
+                    .filter(|card| card.get_suit() == s)
+                    .cloned()
+                    .collect::<Vec<Card>>(),
+                hand.get_cards()
+                    .iter()
+                    .filter(|card| card.get_suit() == w && card.get_rank() > winner.get_rank())
+                    .cloned()
+                    .collect(),
+                hand.get_cards().to_vec(),
+                vec![],
+            ],
+            (s, w) => panic!(
+                "this starter: {:?} winner: {:?} combination must not be possible",
+                s, w
+            ),
+        };
+
+        match candidates.iter().find(|v| !v.is_empty()) {
+            Some(v) => v.clone(),
+            _ => vec![],
         }
-        Err(Error::NoTrickWinnerYet)
     }
 
-    fn starting_card(&self) -> Option<Card> {
-        self.cards[self.starter_turn]
-    }
-
+    /*
     // TODO: look into if this must return a vector
     pub(crate) fn valid_from_hand(&self, hand: &Hand) -> Result<Vec<Card>> {
         let starter = match self.starting_card() {
@@ -166,4 +246,5 @@ impl Trick {
         }
         Ok(hand.get_cards().to_vec())
     }
+    */
 }

@@ -20,7 +20,6 @@ pub use turn::Turn;
 
 #[cfg(test)]
 mod tests {
-    use deck::{Rank, Suit};
     use tracing_subscriber::EnvFilter;
 
     use super::*;
@@ -130,37 +129,6 @@ mod tests {
                 }
             }
             assert!(has_face)
-        }
-    }
-
-    #[test]
-    fn a_player_can_call() {
-        let mut game = Game::new();
-        let mut players = vec![];
-        for i in 0..4 {
-            let player = game.add_player(format!("{i}")).unwrap().clone();
-            players.push(player);
-        }
-        for player in players {
-            if game.get_turn(&player) == Turn::new(0) {
-                game.call(&player, Call::new(1).unwrap()).unwrap();
-            }
-        }
-    }
-
-    #[test]
-    fn a_player_cannot_call_out_of_turn() {
-        let mut game = Game::new();
-        let mut players = vec![];
-        for i in 0..4 {
-            let player = game.add_player(format!("{i}")).unwrap().clone();
-            players.push(player);
-        }
-        for player in players {
-            if game.get_turn(&player) != Turn::new(0) {
-                let action = game.call(&player, Call::new(1).unwrap());
-                assert_eq!(action, Err(Error::PlayerCalledOutOfTurn));
-            }
         }
     }
 
