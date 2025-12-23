@@ -9,6 +9,9 @@ use serde::{Deserialize, Serialize};
 pub struct Hand(Vec<Card>);
 
 impl Hand {
+    // FIXME: This should be init with [Card; 13] or Vec<Card> with len 13
+    // and should return an error if the valid rules are not met instead of having a is_valid
+    // function that needs to be called separately.
     pub(crate) fn new() -> Self {
         Self::default()
     }
@@ -27,6 +30,15 @@ impl Hand {
         }
     }
 
+    pub(crate) fn filter<P>(&self, mut predicate: P) -> impl Iterator<Item = &Card>
+    where
+        P: FnMut(&Card) -> bool,
+    {
+        self.0.iter().filter(move |card| predicate(card))
+    }
+
+    // FIXME: it would be really neat if this chould be implemented as an interator that takes a
+    // predicate and filters based on that
     pub(crate) fn get_cards(&self) -> &[Card] {
         self.0.as_ref()
     }

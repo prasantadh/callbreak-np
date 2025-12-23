@@ -17,7 +17,6 @@ impl Trick {
     // during deserialization, which should not happen.
     // on second thought, why should this support deserialization at all?!
     pub(crate) fn new(starter: Turn) -> Self {
-        println!("trick setup with starter: {starter:?}");
         Trick {
             starter_turn: starter,
             cards: [None; 4],
@@ -90,7 +89,7 @@ impl Trick {
         let starter = if let (_, Some(card)) = self.starter() {
             card
         } else {
-            return vec![];
+            return hand.get_cards().to_vec();
         };
         let winner = self
             .winner()
@@ -117,6 +116,7 @@ impl Trick {
                     .collect::<Vec<Card>>(),
                 hand.get_cards().to_vec(),
             ],
+
             (s, w) if s != w => [
                 // implies w == Spades and s!= Spades
                 hand.get_cards()
@@ -143,108 +143,52 @@ impl Trick {
             _ => vec![],
         }
     }
+}
 
-    /*
-    // TODO: look into if this must return a vector
-    pub(crate) fn valid_from_hand(&self, hand: &Hand) -> Result<Vec<Card>> {
-        let starter = match self.starting_card() {
-            None => return Ok(hand.get_cards().to_vec()),
-            Some(v) => v,
-        };
-        let winner = self.winning_card()?;
+#[cfg(test)]
+mod tests {
 
-        if starter.get_suit() == Suit::Spades {
-            let winning_spades: Vec<Card> = hand
-                .get_cards()
-                .iter()
-                .filter_map(|v| {
-                    match v.get_suit() == Suit::Spades && v.get_rank() > winner.get_rank() {
-                        true => Some(*v),
-                        false => None,
-                    }
-                })
-                .collect();
-            if !winning_spades.is_empty() {
-                return Ok(winning_spades);
-            };
+    use super::*;
+    use deck::Rank;
 
-            let any_spades: Vec<Card> = hand
-                .get_cards()
-                .iter()
-                .filter_map(|v| match v.get_suit() == Suit::Spades {
-                    true => Some(*v),
-                    false => None,
-                })
-                .collect();
-            if !any_spades.is_empty() {
-                return Ok(any_spades);
-            };
-        } else if winner.get_suit() == Suit::Spades {
-            let any_starter_suit: Vec<Card> = hand
-                .get_cards()
-                .iter()
-                .filter_map(|v| match v.get_suit() == starter.get_suit() {
-                    true => Some(*v),
-                    false => None,
-                })
-                .collect();
-            if !any_starter_suit.is_empty() {
-                return Ok(any_starter_suit);
-            };
+    #[test]
+    fn must_play_winning_rank_of_starter_suit() {}
 
-            let winning_spades: Vec<Card> = hand
-                .get_cards()
-                .iter()
-                .filter_map(|v| {
-                    match v.get_suit() == Suit::Spades && v.get_rank() > winner.get_rank() {
-                        true => Some(*v),
-                        false => None,
-                    }
-                })
-                .collect();
-            if !winning_spades.is_empty() {
-                return Ok(winning_spades);
-            }
-        } else {
-            let winning_starter_suit: Vec<Card> = hand
-                .get_cards()
-                .iter()
-                .filter_map(|v| {
-                    match v.get_suit() == starter.get_suit() && v.get_rank() > winner.get_rank() {
-                        true => Some(*v),
-                        false => None,
-                    }
-                })
-                .collect();
-            if !winning_starter_suit.is_empty() {
-                return Ok(winning_starter_suit);
-            }
+    #[test]
+    fn must_play_any_of_starter_suit() {}
 
-            let any_starter_suit: Vec<Card> = hand
-                .get_cards()
-                .iter()
-                .filter_map(|v| match v.get_suit() == starter.get_suit() {
-                    true => Some(*v),
-                    false => None,
-                })
-                .collect();
-            if !any_starter_suit.is_empty() {
-                return Ok(any_starter_suit);
-            }
+    #[test]
+    fn must_play_spade_if_missing_starter_suit() {}
 
-            let any_spades: Vec<Card> = hand
-                .get_cards()
-                .iter()
-                .filter_map(|v| match v.get_suit() == Suit::Spades {
-                    true => Some(*v),
-                    false => None,
-                })
-                .collect();
-            if !any_spades.is_empty() {
-                return Ok(any_spades);
-            }
-        }
-        Ok(hand.get_cards().to_vec())
+    #[test]
+    fn must_play_winning_spade_if_missing_starter_suit() {}
+
+    #[test]
+    fn valid_play_from_same_suit_winner_is_correct() {
+        let mut trick = Trick::new(Turn::new(0));
+        let mut hand = Hand::new();
+        hand.add_card(Card::new(Rank::Six, Suit::Clubs)).unwrap();
+        hand.add_card(Card::new(Rank::Seven, Suit::Clubs)).unwrap();
+        hand.add_card(Card::new(Rank::Eight, Suit::Spades)).unwrap();
+        hand.add_card(Card::new(Rank::Nine, Suit::Spades)).unwrap();
+
+        let moves = trick.valid_play_from(&hand);
+        println!("==> {:?}", moves);
+
+        trick
+            .play(Card::new(Rank::Six, Suit::Clubs), &mut hand)
+            .unwrap();
+        trick
+            .play(Card::new(Rank::Seven, Suit::Clubs), &mut hand)
+            .unwrap();
+
+        let moves = trick.valid_play_from(&hand);
+        println!("==> {:?}", moves);
+        trick
+            .play(Card::new(Rank::Eight, Suit::Clubs), &mut hand)
+            .unwrap();
+        trick
+            .play(Card::new(Rank::Nine, Suit::Clubs), &mut hand)
+            .unwrap();
     }
-    */
 }

@@ -56,6 +56,7 @@ impl Game {
                         .find(|slot| slot.is_none())
                         .expect("an empty slot is expected in the Lobby")
                         .replace(Player::new(id));
+                    #[cfg(not(test))]
                     if self.state() == State::RoundInProgress {
                         let mut rng = rng();
                         self.players.shuffle(&mut rng);
