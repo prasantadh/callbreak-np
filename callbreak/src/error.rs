@@ -9,6 +9,9 @@ pub enum Error {
     HandIsFull,
     HandHasCardAlready,
     HandDoesNotHaveThisCard,
+    NoFaceCards,
+    NoSpade,
+    Not13Cards,
     // Player Errors
     PlayerAlreadyCalled,
     TurnIsAlreadySet,

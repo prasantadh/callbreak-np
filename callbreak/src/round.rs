@@ -36,24 +36,24 @@ impl Round {
     }
 
     pub(crate) fn new(starter: Turn) -> Self {
-        loop {
-            let deck = Deck::new();
-            let mut hands = array::from_fn(|_| Hand::new());
-            let mut turn = Turn::new(0);
-            for card in deck {
-                hands[turn]
-                    .add_card(card)
-                    .expect("hands must have enough space for cards");
-                turn = turn.next();
+        let mut hands = vec![];
+        'dealing: loop {
+            let deck: Vec<Card> = Deck::new().collect();
+            hands = vec![];
+            for i in 0..4 {
+                if let Ok(hand) = Hand::try_from(&deck[i * 13..(i + 1) * 13]) {
+                    hands.push(hand);
+                } else {
+                    continue 'dealing;
+                }
             }
-            if hands.iter().all(|hand| hand.is_valid()) {
-                return Round {
-                    starter,
-                    hands,
-                    calls: [None; 4],
-                    tricks: array::from_fn(|_| None),
-                };
-            }
+            break;
+        }
+        Round {
+            starter,
+            hands: hands.try_into().expect("must be exactly 4 hands"),
+            calls: [None; 4],
+            tricks: array::from_fn(|_| None),
         }
     }
 
@@ -103,7 +103,7 @@ impl Round {
                         .iter()
                         .position(|trick| trick.is_none())
                         .expect("must have available trick when round is not over");
-                    // winner from last round or the starter of this round
+                    // winner from last trick or the starter of this round
                     let next = if slot == 0 {
                         self.starter
                     } else {
@@ -115,10 +115,14 @@ impl Round {
                             .0
                     };
                     self.tricks[slot] = Some(Trick::new(next));
-                    self.tricks[slot]
-                        .as_mut()
-                        .expect("just initialized trick must be available")
-                        .play(card, &mut self.hands[next])
+                    if next != turn {
+                        Err(Error::NotYourTurn)
+                    } else {
+                        self.tricks[slot]
+                            .as_mut()
+                            .expect("just initialized trick must be available")
+                            .play(card, &mut self.hands[next])
+                    }
                 }
             }
             _ => Err(Error::NotAcceptingPlay),

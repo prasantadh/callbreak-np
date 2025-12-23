@@ -5,42 +5,14 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(transparent)]
-// TODO: is it better to handle this as [Option<Card>; 13]
 pub struct Hand(Vec<Card>);
 
 impl Hand {
-    // FIXME: This should be init with [Card; 13] or Vec<Card> with len 13
-    // and should return an error if the valid rules are not met instead of having a is_valid
-    // function that needs to be called separately.
-    pub(crate) fn new() -> Self {
-        Self::default()
-    }
-
-    pub(crate) fn add_card(&mut self, card: Card) -> Result<()> {
-        if self.0.contains(&card) {
-            return Err(Error::HandHasCardAlready);
-        }
-
-        match self.0.len() {
-            v if v < 13 => {
-                self.0.push(card);
-                Ok(())
-            }
-            _ => Err(Error::HandIsFull),
-        }
-    }
-
     pub(crate) fn filter<P>(&self, mut predicate: P) -> impl Iterator<Item = &Card>
     where
         P: FnMut(&Card) -> bool,
     {
         self.0.iter().filter(move |card| predicate(card))
-    }
-
-    // FIXME: it would be really neat if this chould be implemented as an interator that takes a
-    // predicate and filters based on that
-    pub(crate) fn get_cards(&self) -> &[Card] {
-        self.0.as_ref()
     }
 
     pub(crate) fn play(&mut self, card: Card) -> Result<()> {
@@ -52,14 +24,25 @@ impl Hand {
             Err(Error::HandDoesNotHaveThisCard)
         }
     }
+}
 
-    pub(crate) fn is_valid(&self) -> bool {
+impl TryFrom<&[Card]> for Hand {
+    type Error = Error;
+    fn try_from(cards: &[Card]) -> std::result::Result<Self, Self::Error> {
         let mut has_spades = false;
         let mut has_face = false;
-        for card in self.0.iter() {
+        for card in cards.iter() {
             has_face |= card.get_rank() >= Rank::Jack;
             has_spades |= card.get_suit() == Suit::Spades;
         }
-        has_face && has_spades && self.0.len() == 13
+        if !has_face {
+            Err(Error::NoFaceCards)
+        } else if !has_spades {
+            Err(Error::NoSpade)
+        } else if !cards.len() != 13 {
+            Err(Error::Not13Cards)
+        } else {
+            Ok(Self(cards.to_vec()))
+        }
     }
 }
