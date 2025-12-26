@@ -28,6 +28,7 @@ impl Trick {
             Err(Error::NotAcceptingPlay)
         } else {
             let next = self.next().expect("must have next available when not over");
+            // TODO: may be a trick should not accept a duplicate card either?
             self.cards[next] = Some(card);
             Ok(())
         }
@@ -136,48 +137,140 @@ impl Trick {
 mod tests {
 
     use super::*;
-    use deck::Rank;
+    use deck::Rank::*;
+    use deck::Suit::*;
 
-    #[test]
-    fn must_play_winning_rank_of_starter_suit() {}
-
-    #[test]
-    fn must_play_any_of_starter_suit() {}
-
-    #[test]
-    fn must_play_spade_if_missing_starter_suit() {}
-
-    #[test]
-    fn must_play_winning_spade_if_missing_starter_suit() {}
-
-    /*
-    #[test]
-    fn valid_play_from_same_suit_winner_is_correct() {
-        let mut trick = Trick::new(Turn::new(0));
-        let mut hand = Hand::new();
-        hand.add_card(Card::new(Rank::Six, Suit::Clubs)).unwrap();
-        hand.add_card(Card::new(Rank::Seven, Suit::Clubs)).unwrap();
-        hand.add_card(Card::new(Rank::Eight, Suit::Spades)).unwrap();
-        hand.add_card(Card::new(Rank::Nine, Suit::Spades)).unwrap();
-
-        let moves = trick.valid_play_from(&hand);
-        println!("==> {:?}", moves);
-
-        trick
-            .play(Card::new(Rank::Six, Suit::Clubs), &mut hand)
-            .unwrap();
-        trick
-            .play(Card::new(Rank::Seven, Suit::Clubs), &mut hand)
-            .unwrap();
-
-        let moves = trick.valid_play_from(&hand);
-        println!("==> {:?}", moves);
-        trick
-            .play(Card::new(Rank::Eight, Suit::Clubs), &mut hand)
-            .unwrap();
-        trick
-            .play(Card::new(Rank::Nine, Suit::Clubs), &mut hand)
-            .unwrap();
+    fn random_turn() -> Turn {
+        Turn::new(rand::random_range(0..=3))
     }
-    */
+
+    fn hand_with_0_clubs_234qk_diamonds_234qk_hearts_23k_spades() -> Hand {
+        let cards = vec![
+            Card::new(Two, Diamonds),
+            Card::new(Three, Diamonds),
+            Card::new(Four, Diamonds),
+            Card::new(Queen, Diamonds),
+            Card::new(King, Diamonds),
+            Card::new(Two, Hearts),
+            Card::new(Three, Hearts),
+            Card::new(Four, Hearts),
+            Card::new(Queen, Hearts),
+            Card::new(King, Hearts),
+            Card::new(Two, Spades),
+            Card::new(Three, Spades),
+            Card::new(King, Spades),
+        ];
+        Hand::try_from(cards.as_slice()).unwrap()
+    }
+
+    #[test]
+    fn starter_card_is_none_for_new_trick() {
+        let card = Trick::new(random_turn()).starter().1;
+        assert!(card.is_none())
+    }
+
+    #[test]
+    fn starter_card_is_some_after_first_play() {
+        let mut trick = Trick::new(random_turn());
+        let card = Card::new(Five, Hearts);
+        trick.play(card).unwrap();
+        trick.play(Card::new(Six, Hearts)).unwrap();
+        trick.play(Card::new(Two, Hearts)).unwrap();
+        let starter = trick.starter().1;
+        assert!(starter.is_some_and(|c| c == card));
+    }
+
+    #[test]
+    fn winner_is_none_when_no_play() {
+        let trick = Trick::new(random_turn());
+        assert!(trick.winner().is_none());
+    }
+
+    #[test]
+    fn winner_is_correct_when_all_plays_are_non_spades() {
+        let mut trick = Trick::new(random_turn());
+        trick.play(Card::new(Queen, Clubs)).unwrap();
+        trick.play(Card::new(King, Clubs)).unwrap();
+        trick.play(Card::new(Two, Clubs)).unwrap();
+        trick.play(Card::new(Ace, Hearts)).unwrap();
+        assert!(trick.winner().is_some_and(
+            |(turn, card)| turn == trick.starter().0.next() && card == Card::new(King, Clubs)
+        ));
+    }
+
+    #[test]
+    fn winner_is_correct_when_non_spade_starter_is_spaded() {
+        let mut trick = Trick::new(random_turn());
+        trick.play(Card::new(Queen, Clubs)).unwrap();
+        trick.play(Card::new(King, Clubs)).unwrap();
+        trick.play(Card::new(Two, Spades)).unwrap();
+        trick.play(Card::new(Ace, Hearts)).unwrap();
+        assert!(
+            trick
+                .winner()
+                .is_some_and(|(turn, card)| turn == trick.starter().0.next().next()
+                    && card == Card::new(Two, Spades))
+        );
+    }
+
+    #[test]
+    fn winner_is_correct_when_non_spade_starter_is_spaded_twice() {
+        let mut trick = Trick::new(random_turn());
+        trick.play(Card::new(Queen, Clubs)).unwrap();
+        trick.play(Card::new(King, Clubs)).unwrap();
+        trick.play(Card::new(Two, Spades)).unwrap();
+        trick.play(Card::new(Four, Spades)).unwrap();
+        assert!(trick.winner().is_some_and(|(turn, card)| turn
+            == trick.starter().0.next().next().next()
+            && card == Card::new(Four, Spades)));
+    }
+
+    #[test]
+    fn winner_is_correct_when_all_plays_are_spades() {
+        let mut trick = Trick::new(random_turn());
+        trick.play(Card::new(Queen, Spades)).unwrap();
+        trick.play(Card::new(King, Spades)).unwrap();
+        trick.play(Card::new(Two, Spades)).unwrap();
+        trick.play(Card::new(Seven, Spades)).unwrap();
+        assert!(trick.winner().is_some_and(
+            |(turn, card)| turn == trick.starter().0.next() && card == Card::new(King, Spades)
+        ));
+    }
+
+    #[test]
+    fn only_winning_rank_of_starter_suit_is_valid_play() {
+        let mut trick = Trick::new(random_turn());
+        trick.play(Card::new(Seven, Diamonds)).unwrap();
+
+        let hand = hand_with_0_clubs_234qk_diamonds_234qk_hearts_23k_spades();
+        assert!(trick.valid_play_from(&hand).len() == 2)
+    }
+
+    #[test]
+    fn only_starter_suit_is_valid_is_valid() {
+        let mut trick = Trick::new(random_turn());
+        trick.play(Card::new(Ace, Diamonds)).unwrap();
+
+        let hand = hand_with_0_clubs_234qk_diamonds_234qk_hearts_23k_spades();
+        assert!(trick.valid_play_from(&hand).len() == 5)
+    }
+
+    #[test]
+    fn only_spade_is_valid_play_if_missing_starter_suit() {
+        let mut trick = Trick::new(random_turn());
+        trick.play(Card::new(Ace, Clubs)).unwrap();
+
+        let hand = hand_with_0_clubs_234qk_diamonds_234qk_hearts_23k_spades();
+        assert!(trick.valid_play_from(&hand).len() == 3)
+    }
+
+    #[test]
+    fn only_winning_spade_is_valid_play_if_missing_starter_suit() {
+        let mut trick = Trick::new(random_turn());
+        trick.play(Card::new(Ace, Clubs)).unwrap();
+        trick.play(Card::new(Five, Spades)).unwrap();
+
+        let hand = hand_with_0_clubs_234qk_diamonds_234qk_hearts_23k_spades();
+        assert!(trick.valid_play_from(&hand).len() == 1)
+    }
 }
