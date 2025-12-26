@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::rank::Rank;
 use crate::suit::Suit;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub struct Card {
     rank: Rank,
     suit: Suit,

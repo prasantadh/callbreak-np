@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::{Error, Result};
 
 use deck::{Card, Rank, Suit};
@@ -36,11 +38,13 @@ impl TryFrom<&[Card]> for Hand {
             has_spades |= card.get_suit() == Suit::Spades;
         }
         if !has_face {
-            Err(Error::NoFaceCards)
+            Err(Error::RequiresFaceCard)
         } else if !has_spades {
-            Err(Error::NoSpade)
-        } else if !cards.len() != 13 {
+            Err(Error::RequiresSpades)
+        } else if cards.len() != 13 {
             Err(Error::Not13Cards)
+        } else if HashSet::<&Card>::from_iter(cards.iter()).len() != 13 {
+            Err(Error::HasDuplicateCards)
         } else {
             Ok(Self(cards.to_vec()))
         }
