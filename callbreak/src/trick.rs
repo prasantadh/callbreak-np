@@ -27,14 +27,14 @@ impl Trick {
         if self.is_over() {
             Err(Error::NotAcceptingPlay)
         } else {
-            let next = self.next().expect("must have next available when not over");
+            let next = self.turn().expect("must have next available when not over");
             // TODO: may be a trick should not accept a duplicate card either?
             self.cards[next] = Some(card);
             Ok(())
         }
     }
 
-    pub(crate) fn next(&self) -> Result<Turn> {
+    pub(crate) fn turn(&self) -> Result<Turn> {
         if self.is_over() {
             Err(Error::NotAcceptingPlay)
         } else {
