@@ -23,15 +23,13 @@ impl Trick {
         }
     }
 
-    pub(crate) fn play(&mut self, card: Card, hand: &mut Hand) -> Result<()> {
-        let valid_moves = self.valid_play_from(hand);
-        if valid_moves.contains(&card) {
-            let next = self.next()?;
-            hand.play(card)?;
+    pub(crate) fn play(&mut self, card: Card) -> Result<()> {
+        if self.is_over() {
+            Err(Error::NotAcceptingPlay)
+        } else {
+            let next = self.next().expect("must have next available when not over");
             self.cards[next] = Some(card);
             Ok(())
-        } else {
-            Err(Error::InvalidPlay)
         }
     }
 
@@ -85,7 +83,11 @@ impl Trick {
         }
     }
 
-    fn valid_play_from(&self, hand: &Hand) -> Vec<Card> {
+    pub(crate) fn valid_play_from(&self, hand: &Hand) -> Vec<Card> {
+        if self.is_over() {
+            return vec![];
+        }
+
         let starter = if let (_, Some(card)) = self.starter() {
             card
         } else {

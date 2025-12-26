@@ -84,19 +84,14 @@ impl Round {
             State::TrickInProgress => {
                 // is there a trick that is currently running and not full?
                 // yes, play into that. else start a new trick
-                if let Some(trick) = self
+                let trick = if let Some(trick) = self
                     .tricks
                     .iter_mut()
                     .rev()
                     .find_map(|t| t.as_mut())
                     .filter(|trick| !trick.is_over())
                 {
-                    let next = trick.next()?;
-                    if next != turn {
-                        Err(Error::NotYourTurn)
-                    } else {
-                        trick.play(card, &mut self.hands[next])
-                    }
+                    trick
                 } else {
                     let slot = self
                         .tricks
@@ -115,15 +110,23 @@ impl Round {
                             .0
                     };
                     self.tricks[slot] = Some(Trick::new(next));
-                    if next != turn {
-                        Err(Error::NotYourTurn)
-                    } else {
-                        self.tricks[slot]
-                            .as_mut()
-                            .expect("just initialized trick must be available")
-                            .play(card, &mut self.hands[next])
-                    }
+                    self.tricks[slot]
+                        .as_mut()
+                        .expect("just initialized trick must be available")
+                };
+
+                let next = trick.next().expect("must have the next play available");
+                if next != turn {
+                    return Err(Error::NotYourTurn);
                 }
+
+                let hand = &mut self.hands[next];
+                if !trick.valid_play_from(hand).contains(&card) {
+                    return Err(Error::InvalidPlay);
+                }
+                hand.play(card).expect("must be playable from this hand");
+                trick.play(card).expect("must be playable into this trick");
+                Ok(())
             }
             _ => Err(Error::NotAcceptingPlay),
         }
