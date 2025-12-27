@@ -27,7 +27,9 @@ impl Round {
         } else if self
             .tricks
             .last()
-            .is_some_and(|t| t.as_ref().unwrap().is_over())
+            .expect("must have the last slot available by definition")
+            .clone()
+            .is_some_and(|t| t.is_over())
         {
             State::Over
         } else {
@@ -115,7 +117,7 @@ impl Round {
                         .expect("just initialized trick must be available")
                 };
 
-                let next = trick.next().expect("must have the next play available");
+                let next = trick.turn().expect("must have the next play available");
                 if next != turn {
                     return Err(Error::NotYourTurn);
                 }
@@ -135,4 +137,74 @@ impl Round {
     pub(crate) fn is_over(&self) -> bool {
         self.state() == State::Over
     }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn random_turn() -> Turn {
+        Turn::new(rand::random_range(0..=3))
+    }
+
+    #[test]
+    fn must_err_when_play_before_call() {}
+
+    #[test]
+    fn must_be_able_to_call_on_new_round() {
+        let mut starter = random_turn();
+        let mut round = Round::new(starter);
+        for _ in 0..=3 {
+            round.call(Call::new(1).unwrap(), starter).unwrap();
+            starter = starter.next()
+        }
+    }
+
+    #[test]
+    fn must_err_on_more_than_4_calls() {
+        let mut starter = random_turn();
+        let mut round = Round::new(starter);
+        for _ in 0..=3 {
+            round.call(Call::new(1).unwrap(), starter).unwrap();
+            starter = starter.next()
+        }
+        let action = round.call(Call::new(1).unwrap(), starter);
+        assert!(action.is_err())
+    }
+
+    #[test]
+    fn must_err_on_call_out_of_turn() {
+        let starter = random_turn();
+        let mut round = Round::new(starter);
+
+        let action = round.call(Call::new(1).unwrap(), starter.next());
+        assert!(action.is_err());
+
+        round.call(Call::new(1).unwrap(), starter).unwrap();
+        let action = round.call(Call::new(1).unwrap(), starter.next());
+        assert!(action.is_ok())
+    }
+
+    /*
+    #[test]
+    fn must_be_able_to_play_till_end() {
+        let mut starter = random_turn();
+        let mut round = Round::new(starter);
+
+        for _ in 0..4 {
+            round.call(Call::new(3).unwrap(), starter).unwrap();
+            starter = starter.next();
+        }
+
+        for trick in 0..13 {
+            for _turn in 0..4 {
+                let trick = &mut round.tricks[trick]
+                let turn = round.turn();
+                let moves = round.trick().get_valid_moves(round.hands[turn]);
+                // get a valid play
+                // play anything from there
+            }
+        }
+    }
+    */
 }
