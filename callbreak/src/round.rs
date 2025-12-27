@@ -165,6 +165,10 @@ impl Round {
         }
     }
 
+    pub(crate) fn get_hand(&self, turn: Turn) -> Vec<Card> {
+        self.hands[turn].filter(|_| true).cloned().collect()
+    }
+
     pub(crate) fn is_over(&self) -> bool {
         self.state() == State::Over
     }
