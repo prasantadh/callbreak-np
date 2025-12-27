@@ -62,20 +62,11 @@ impl Round {
     pub(crate) fn call(&mut self, call: Call, turn: Turn) -> Result<()> {
         match self.state() {
             State::Calling => {
-                // find who is next
-                let mut next = self.starter;
-                while self.calls[next].is_some() {
-                    // loop must terminate because it is calling
-                    next = next.next();
-                }
-
-                // set the call
-                if next != turn {
+                if self.turn()? != turn {
                     return Err(Error::NotYourTurn);
                 } else {
                     self.calls[turn] = Some(call);
                 }
-
                 // if all calls are made, start a trick
                 if turn.next() == self.starter {
                     self.tricks[0] = Some(Trick::new(self.starter))
@@ -96,21 +87,19 @@ impl Round {
                     .expect("must have an active trick in this state");
 
                 let winner = {
+                    if turn != self.turn()? {
+                        return Err(Error::NotYourTurn);
+                    }
+                    if !self.get_valid_moves(turn)?.contains(&card) {
+                        return Err(Error::InvalidPlay);
+                    }
+                    // TODO: if hand.play() passes trick.play() must not fail.
+                    // The code doesn't read like a single transaction at the moment.
+                    // There might be a way to write it better?
                     let trick = self.tricks[slot]
                         .as_mut()
                         .expect("current trick must be available");
-                    if turn != trick.turn()? {
-                        return Err(Error::NotYourTurn);
-                    }
-                    let hand = &mut self.hands[turn];
-                    if trick.valid_play_from(hand).contains(&card) {
-                        return Err(Error::InvalidPlay);
-                    }
-                    // TODO: there is some issue here where if hand.play() passes
-                    // trick.play() must not fail. The code doesn't enforce that at the moment
-                    // which could lead to logic bugs in the future being overlooked.
-                    // a potential solution is to move valid_play_from() to this mod from trick?
-                    hand.play(card)?;
+                    self.hands[turn].play(card)?;
                     trick.play(card)?;
                     trick
                         .winner()
@@ -134,18 +123,18 @@ impl Round {
     pub(crate) fn get_valid_moves(&self, turn: Turn) -> Result<Vec<Card>> {
         match self.state() {
             State::TrickInProgress => {
+                if turn != self.turn()? {
+                    return Err(Error::NotYourTurn);
+                }
                 let slot = self
                     .tricks
                     .iter()
                     .position(|t| t.as_ref().is_some_and(|t| !t.is_over()))
                     .expect("must have an active trick in this state");
-                let trick = self.tricks[slot]
+                Ok(self.tricks[slot]
                     .as_ref()
-                    .expect("active trick must be Some(trick)");
-                if turn != trick.turn()? {
-                    return Err(Error::NotYourTurn);
-                }
-                Ok(trick.valid_play_from(&self.hands[turn]))
+                    .unwrap()
+                    .valid_play_from(&self.hands[turn]))
             }
             _ => Err(Error::NotAcceptingPlay),
         }
@@ -153,8 +142,25 @@ impl Round {
 
     pub(crate) fn turn(&self) -> Result<Turn> {
         match self.state() {
-            State::Calling => Ok(Turn::new(0)),
-            State::TrickInProgress => Ok(Turn::new(1)),
+            State::Calling => {
+                let mut next = self.starter;
+                while self.calls[next].is_some() {
+                    // loop must terminate because it is calling
+                    next = next.next();
+                }
+                Ok(next)
+            }
+            State::TrickInProgress => {
+                let slot = self
+                    .tricks
+                    .iter()
+                    .position(|t| t.as_ref().is_some_and(|t| !t.is_over()))
+                    .expect("must have an active trick in this state");
+                self.tricks[slot]
+                    .as_ref()
+                    .expect("active trick must be Some(trick)")
+                    .turn()
+            }
             State::Over => Err(Error::RoundIsOver),
         }
     }
@@ -173,7 +179,13 @@ mod test {
     }
 
     #[test]
-    fn must_err_when_play_before_call() {}
+    fn must_err_when_play_before_call() {
+        let starter = random_turn();
+        let round = Round::new(starter);
+        let turn = round.turn().unwrap();
+        let action = round.get_valid_moves(turn);
+        assert!(action.is_err())
+    }
 
     #[test]
     fn must_be_able_to_call_on_new_round() {
@@ -210,7 +222,6 @@ mod test {
         assert!(action.is_ok())
     }
 
-    /*
     #[test]
     fn must_be_able_to_play_till_end() {
         let mut starter = random_turn();
@@ -221,14 +232,12 @@ mod test {
             starter = starter.next();
         }
 
-        for trick in 0..13 {
-            for turn in 0..4 {
-                let moves = round.get_valid_moves(round.turn()).unwrap();
-                round.play(moves.first().unwrap(), turn)
-                // get a valid play
-                // play anything from there
+        for _trick in 0..13 {
+            for _turn in 0..4 {
+                let turn = round.turn().unwrap();
+                let moves = round.get_valid_moves(turn).unwrap();
+                round.play(*moves.first().unwrap(), turn).unwrap();
             }
         }
     }
-    */
 }
