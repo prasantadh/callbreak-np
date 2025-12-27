@@ -28,7 +28,7 @@ impl Round {
             .tricks
             .last()
             .expect("must have the last slot available by definition")
-            .clone()
+            .as_ref()
             .is_some_and(|t| t.is_over())
         {
             State::Over
@@ -71,11 +71,16 @@ impl Round {
 
                 // set the call
                 if next != turn {
-                    Err(Error::NotYourTurn)
+                    return Err(Error::NotYourTurn);
                 } else {
                     self.calls[turn] = Some(call);
-                    Ok(())
                 }
+
+                // if all calls are made, start a trick
+                if turn.next() == self.starter {
+                    self.tricks[0] = Some(Trick::new(self.starter))
+                }
+                Ok(())
             }
             _ => Err(Error::NotAcceptingCalls),
         }
@@ -84,53 +89,73 @@ impl Round {
     pub(crate) fn play(&mut self, card: Card, turn: Turn) -> Result<()> {
         match self.state() {
             State::TrickInProgress => {
-                // is there a trick that is currently running and not full?
-                // yes, play into that. else start a new trick
-                let trick = if let Some(trick) = self
+                let slot = self
                     .tricks
-                    .iter_mut()
-                    .rev()
-                    .find_map(|t| t.as_mut())
-                    .filter(|trick| !trick.is_over())
-                {
-                    trick
-                } else {
-                    let slot = self
-                        .tricks
-                        .iter()
-                        .position(|trick| trick.is_none())
-                        .expect("must have available trick when round is not over");
-                    // winner from last trick or the starter of this round
-                    let next = if slot == 0 {
-                        self.starter
-                    } else {
-                        self.tricks[slot - 1]
-                            .as_ref()
-                            .expect("must have last trick initialized")
-                            .winner()
-                            .expect("must have winner for the last trick")
-                            .0
-                    };
-                    self.tricks[slot] = Some(Trick::new(next));
-                    self.tricks[slot]
+                    .iter()
+                    .position(|t| t.as_ref().is_some_and(|t| !t.is_over()))
+                    .expect("must have an active trick in this state");
+
+                let winner = {
+                    let trick = self.tricks[slot]
                         .as_mut()
-                        .expect("just initialized trick must be available")
+                        .expect("current trick must be available");
+                    if turn != trick.turn()? {
+                        return Err(Error::NotYourTurn);
+                    }
+                    let hand = &mut self.hands[turn];
+                    if trick.valid_play_from(hand).contains(&card) {
+                        return Err(Error::InvalidPlay);
+                    }
+                    // TODO: there is some issue here where if hand.play() passes
+                    // trick.play() must not fail. The code doesn't enforce that at the moment
+                    // which could lead to logic bugs in the future being overlooked.
+                    // a potential solution is to move valid_play_from() to this mod from trick?
+                    hand.play(card)?;
+                    trick.play(card)?;
+                    trick
+                        .winner()
+                        .expect("a started trick must have a winner")
+                        .0
                 };
 
-                let next = trick.turn().expect("must have the next play available");
-                if next != turn {
-                    return Err(Error::NotYourTurn);
+                if slot != 12
+                    && self.tricks[slot]
+                        .as_ref()
+                        .is_some_and(|trick| trick.is_over())
+                {
+                    self.tricks[slot + 1] = Some(Trick::new(winner))
                 }
-
-                let hand = &mut self.hands[next];
-                if !trick.valid_play_from(hand).contains(&card) {
-                    return Err(Error::InvalidPlay);
-                }
-                hand.play(card).expect("must be playable from this hand");
-                trick.play(card).expect("must be playable into this trick");
                 Ok(())
             }
             _ => Err(Error::NotAcceptingPlay),
+        }
+    }
+
+    pub(crate) fn get_valid_moves(&self, turn: Turn) -> Result<Vec<Card>> {
+        match self.state() {
+            State::TrickInProgress => {
+                let slot = self
+                    .tricks
+                    .iter()
+                    .position(|t| t.as_ref().is_some_and(|t| !t.is_over()))
+                    .expect("must have an active trick in this state");
+                let trick = self.tricks[slot]
+                    .as_ref()
+                    .expect("active trick must be Some(trick)");
+                if turn != trick.turn()? {
+                    return Err(Error::NotYourTurn);
+                }
+                Ok(trick.valid_play_from(&self.hands[turn]))
+            }
+            _ => Err(Error::NotAcceptingPlay),
+        }
+    }
+
+    pub(crate) fn turn(&self) -> Result<Turn> {
+        match self.state() {
+            State::Calling => Ok(Turn::new(0)),
+            State::TrickInProgress => Ok(Turn::new(1)),
+            State::Over => Err(Error::RoundIsOver),
         }
     }
 
@@ -197,10 +222,9 @@ mod test {
         }
 
         for trick in 0..13 {
-            for _turn in 0..4 {
-                let trick = &mut round.tricks[trick]
-                let turn = round.turn();
-                let moves = round.trick().get_valid_moves(round.hands[turn]);
+            for turn in 0..4 {
+                let moves = round.get_valid_moves(round.turn()).unwrap();
+                round.play(moves.first().unwrap(), turn)
                 // get a valid play
                 // play anything from there
             }
