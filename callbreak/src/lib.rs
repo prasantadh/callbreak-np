@@ -1,8 +1,12 @@
+pub mod agent;
 pub mod call;
 pub mod error;
 pub mod game;
 pub mod hand;
+pub mod host;
+pub mod message;
 pub mod player;
+pub mod playerview;
 pub mod round;
 pub mod trick;
 pub mod turn;
