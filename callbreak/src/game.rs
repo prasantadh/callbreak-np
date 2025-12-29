@@ -176,6 +176,14 @@ impl Game {
             .map(|p| p.get_id().to_string())
             .collect()
     }
+
+    pub fn is_ready(&self) -> bool {
+        self.state() == State::RoundInProgress
+    }
+
+    pub fn is_over(&self) -> bool {
+        self.state() == State::Over
+    }
 }
 
 #[cfg(test)]
