@@ -4,7 +4,7 @@ use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Trick {
+pub(crate) struct Trick {
     starter_turn: Turn,
     cards: [Option<Card>; 4],
 }

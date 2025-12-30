@@ -5,7 +5,7 @@ use rand::{rng, seq::SliceRandom};
 use serde::Serialize;
 
 #[derive(Debug, Default, Clone, Serialize)]
-pub struct Game {
+pub(crate) struct Game {
     players: [Option<Player>; 4],
     rounds: [Option<Round>; 5],
 }

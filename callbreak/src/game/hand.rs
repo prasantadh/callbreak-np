@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(transparent)]
-pub struct Hand(Vec<Card>);
+pub(crate) struct Hand(Vec<Card>);
 
 impl Hand {
     pub(crate) fn filter<P>(&self, mut predicate: P) -> impl Iterator<Item = &Card>

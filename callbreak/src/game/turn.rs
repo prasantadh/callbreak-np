@@ -3,7 +3,7 @@ use std::ops::{Index, IndexMut};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct Turn(usize);
+pub(crate) struct Turn(usize);
 
 const MAX_TURN: usize = 3;
 
