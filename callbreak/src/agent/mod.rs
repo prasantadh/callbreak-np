@@ -1,5 +1,5 @@
 mod bot;
-use deck::Card;
+use crate::deck::Card;
 
 use crate::{Call, Result, playerview::PlayerView};
 

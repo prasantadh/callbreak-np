@@ -1,13 +1,9 @@
-pub mod card;
-pub mod rank;
-pub mod suit;
-
-pub use card::Card;
-pub use rank::Rank;
-use serde::{Deserialize, Serialize};
-pub use suit::Suit;
+use crate::Card;
+use crate::deck::Rank;
+use crate::deck::Suit;
 
 use rand::{rng, seq::SliceRandom};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Deck {

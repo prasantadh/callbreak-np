@@ -1,6 +1,6 @@
+use crate::deck::{Card, Deck};
 use crate::{Call, Hand, Trick, Turn};
 use crate::{Error, Result};
-use deck::{Card, Deck};
 
 use serde::Serialize;
 use std::array;

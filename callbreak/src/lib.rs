@@ -1,5 +1,6 @@
 pub mod agent;
 pub mod call;
+mod deck;
 pub mod error;
 pub mod game;
 pub mod hand;
@@ -11,8 +12,8 @@ pub mod round;
 pub mod trick;
 pub mod turn;
 
+use crate::deck::Card;
 pub use call::Call;
-pub use deck::Card;
 pub use error::{Error, Result};
 pub use game::Game;
 pub use hand::Hand;

@@ -189,8 +189,8 @@ impl Game {
 #[cfg(test)]
 mod test {
     use super::*;
-    use deck::Rank::*;
-    use deck::Suit::*;
+    use crate::deck::Rank::*;
+    use crate::deck::Suit::*;
 
     #[test]
     fn can_play_to_completion() {
