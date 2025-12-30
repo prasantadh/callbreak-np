@@ -4,7 +4,7 @@ use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct Trick {
+pub struct Trick {
     starter_turn: Turn,
     cards: [Option<Card>; 4],
 }
@@ -82,7 +82,7 @@ impl Trick {
         }
     }
 
-    pub(crate) fn valid_play_from(&self, hand: &Hand) -> Vec<Card> {
+    pub(crate) fn valid_play_from(&self, cards: &[Card]) -> Vec<Card> {
         if self.is_over() {
             return vec![];
         }
@@ -90,7 +90,7 @@ impl Trick {
         let starter = if let (_, Some(card)) = self.starter() {
             card
         } else {
-            return hand.filter(|_| true).cloned().collect();
+            return cards.to_owned();
         };
         let winner = self
             .winner()
@@ -99,23 +99,37 @@ impl Trick {
 
         let candidates: [Vec<Card>; 4] = match (starter.get_suit(), winner.get_suit()) {
             (s, w) if s == w => [
-                hand.filter(|card| card.get_suit() == s && card.get_rank() > winner.get_rank())
+                cards
+                    .iter()
+                    .filter(|card| card.get_suit() == s && card.get_rank() > winner.get_rank())
                     .cloned()
                     .collect(),
-                hand.filter(|card| card.get_suit() == s).cloned().collect(),
+                cards
+                    .iter()
+                    .filter(|card| card.get_suit() == s)
+                    .cloned()
+                    .collect(),
                 // if s = spades this is already handled above but simplifies code for other suits
-                hand.filter(|card| card.get_suit() == Suit::Spades)
+                cards
+                    .iter()
+                    .filter(|card| card.get_suit() == Suit::Spades)
                     .cloned()
                     .collect(),
-                hand.filter(|_| true).cloned().collect(),
+                cards.iter().filter(|_| true).cloned().collect(),
             ],
             (s, w) if s != w => [
                 // implies w == Spades and s!= Spades
-                hand.filter(|card| card.get_suit() == s).cloned().collect(),
-                hand.filter(|card| card.get_suit() == w && card.get_rank() > winner.get_rank())
+                cards
+                    .iter()
+                    .filter(|card| card.get_suit() == s)
                     .cloned()
                     .collect(),
-                hand.filter(|_| true).cloned().collect(),
+                cards
+                    .iter()
+                    .filter(|card| card.get_suit() == w && card.get_rank() > winner.get_rank())
+                    .cloned()
+                    .collect(),
+                cards.iter().filter(|_| true).cloned().collect(),
                 vec![],
             ],
             (s, w) => panic!(
@@ -241,6 +255,9 @@ mod tests {
         trick.play(Card::new(Seven, Diamonds)).unwrap();
 
         let hand = hand_with_0_clubs_234qk_diamonds_234qk_hearts_23k_spades();
+        // FIXME: this is a temporary fix. should look into just having &[Card] returned from the
+        // fixture above to begin with
+        let hand: Vec<Card> = hand.filter(|_| true).cloned().collect();
         assert!(trick.valid_play_from(&hand).len() == 2)
     }
 
@@ -250,6 +267,7 @@ mod tests {
         trick.play(Card::new(Ace, Diamonds)).unwrap();
 
         let hand = hand_with_0_clubs_234qk_diamonds_234qk_hearts_23k_spades();
+        let hand: Vec<Card> = hand.filter(|_| true).cloned().collect();
         assert!(trick.valid_play_from(&hand).len() == 5)
     }
 
@@ -259,6 +277,7 @@ mod tests {
         trick.play(Card::new(Ace, Clubs)).unwrap();
 
         let hand = hand_with_0_clubs_234qk_diamonds_234qk_hearts_23k_spades();
+        let hand: Vec<Card> = hand.filter(|_| true).cloned().collect();
         assert!(trick.valid_play_from(&hand).len() == 3)
     }
 
@@ -269,6 +288,7 @@ mod tests {
         trick.play(Card::new(Five, Spades)).unwrap();
 
         let hand = hand_with_0_clubs_234qk_diamonds_234qk_hearts_23k_spades();
+        let hand: Vec<Card> = hand.filter(|_| true).cloned().collect();
         assert!(trick.valid_play_from(&hand).len() == 1)
     }
 }

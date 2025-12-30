@@ -1,13 +1,11 @@
-use std::collections::HashSet;
-
-use crate::{Error, Result};
-
 use super::{Card, Rank, Suit};
+use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(transparent)]
-pub(crate) struct Hand(Vec<Card>);
+pub struct Hand(Vec<Card>);
 
 impl Hand {
     pub(crate) fn filter<P>(&self, mut predicate: P) -> impl Iterator<Item = &Card>

@@ -2,7 +2,8 @@ use crate::Result;
 use crate::playerview::Context;
 use crate::{Game, agent::Agent, playerview::PlayerView};
 
-struct Host {
+#[derive(Default)]
+pub struct Host {
     // TODO: I don't currently know the full implications of using Box<dyn> here. there seems to be
     // an altenative to use AgentKind enum with all options which seems to have performance
     // trade-offs
@@ -11,15 +12,12 @@ struct Host {
 }
 
 impl Host {
-    pub(crate) fn new() -> Self {
-        Host {
-            game: Game::new(),
-            agents: vec![],
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 
     // add an agent
-    pub(crate) fn add_agent(&mut self, id: String, agent: Box<dyn Agent>) -> Result<()> {
+    pub fn add_agent(&mut self, id: String, agent: Box<dyn Agent>) -> Result<()> {
         self.game.add_player(&id)?;
         self.agents.push((id, agent));
         Ok(())
@@ -29,7 +27,7 @@ impl Host {
         self.game.is_ready()
     }
 
-    pub(crate) fn run(&mut self) {
+    pub fn run(&mut self) {
         for _round in 0..5 {
             // request a call
             for _turn in 0..4 {
@@ -39,25 +37,31 @@ impl Host {
                     .iter()
                     .find(|(id, _)| id == &player)
                     .expect("player must be in agents list");
-                let view = PlayerView::from(Context::new(&self.game, player));
-                agent
+                let view = PlayerView::from(Context::new(&self.game, &player));
+                let call = agent
                     .call(&view)
                     .expect("FIXME: when error, swap out with a bot");
+                self.game.call(&player, call).expect(
+                    "FIXME: if this errors, return error to agent. should make unfallible bot",
+                );
             }
+            println!("Round {_round} finished calling");
 
             // request a break
             for _trick in 0..13 {
                 for _turn in 0..4 {
                     let player = self.game.turn().expect("the next turn must be available");
+                    print!("{player:?} ");
                     let (_, agent) = self
                         .agents
                         .iter()
                         .find(|(id, _)| id == &player)
                         .expect("player must be in agents list");
-                    let view = PlayerView::from(Context::new(&self.game, player));
-                    agent
+                    let view = PlayerView::from(Context::new(&self.game, &player));
+                    let play = agent
                         .play(&view)
                         .expect("FIXME: when error, swap out with a bot");
+                    self.game.play(&player, play).expect("FIXME: if this errors, return error to agent or make a move from the unfallible bot");
                 }
             }
         }

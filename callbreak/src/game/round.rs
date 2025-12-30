@@ -2,8 +2,9 @@ use super::{Call, Hand, Trick, Turn};
 use super::{Card, Deck};
 use crate::{Error, Result};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::array;
+use std::ops::{Index, IndexMut};
 
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct Round {
@@ -131,10 +132,8 @@ impl Round {
                     .iter()
                     .position(|t| t.as_ref().is_some_and(|t| !t.is_over()))
                     .expect("must have an active trick in this state");
-                Ok(self.tricks[slot]
-                    .as_ref()
-                    .unwrap()
-                    .valid_play_from(&self.hands[turn]))
+                let cards: Vec<Card> = self.hands[turn].filter(|_| true).cloned().collect();
+                Ok(self.tricks[slot].as_ref().unwrap().valid_play_from(&cards))
             }
             _ => Err(Error::NotAcceptingPlay),
         }
@@ -165,12 +164,66 @@ impl Round {
         }
     }
 
-    pub(crate) fn get_hand(&self, turn: Turn) -> Vec<Card> {
-        self.hands[turn].filter(|_| true).cloned().collect()
+    pub(crate) fn get_hand(&self, turn: Turn) -> Hand {
+        self.hands[turn].clone()
+    }
+
+    pub(crate) fn get_calls(&self) -> [Option<Call>; 4] {
+        self.calls.into()
+    }
+
+    pub(crate) fn get_tricks(&self) -> Vec<Trick> {
+        // TODO: there is probably some performance optimizations to be had here
+        self.tricks.iter().flatten().cloned().collect()
     }
 
     pub(crate) fn is_over(&self) -> bool {
         self.state() == State::Over
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Serialize, Deserialize)]
+pub struct RoundId(usize);
+impl RoundId {
+    pub fn new(value: usize) -> Result<Self> {
+        match value {
+            v if v < 5 => Ok(RoundId(value)),
+            _ => Err(Error::InvalidRoundId),
+        }
+    }
+
+    pub fn max() -> Self {
+        Self(5)
+    }
+}
+impl From<RoundId> for usize {
+    fn from(value: RoundId) -> Self {
+        value.0
+    }
+}
+impl<T> Index<RoundId> for Vec<T> {
+    type Output = T;
+    fn index(&self, index: RoundId) -> &Self::Output {
+        self.index(index.0)
+    }
+}
+
+impl<T> IndexMut<RoundId> for Vec<T> {
+    fn index_mut(&mut self, index: RoundId) -> &mut Self::Output {
+        &mut self[index.0]
+    }
+}
+
+impl<T> Index<RoundId> for [T] {
+    type Output = T;
+    fn index(&self, index: RoundId) -> &Self::Output {
+        self.index(index.0)
+    }
+}
+
+impl<T> IndexMut<RoundId> for [T] {
+    fn index_mut(&mut self, index: RoundId) -> &mut Self::Output {
+        &mut self[index.0]
     }
 }
 

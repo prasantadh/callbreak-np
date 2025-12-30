@@ -7,11 +7,12 @@ mod round;
 mod trick;
 mod turn;
 
-pub(crate) use call::Call;
+pub use call::Call;
 pub(crate) use deck::{Card, Deck, Rank, Suit};
 pub(crate) use game::Game;
-use hand::Hand;
+pub use hand::Hand;
 use player::Player;
 use round::Round;
-use trick::Trick;
+pub use round::RoundId;
+pub use trick::Trick;
 use turn::Turn;

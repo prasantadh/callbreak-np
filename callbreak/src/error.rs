@@ -21,6 +21,7 @@ pub enum Error {
     RoundIsOver,
     PlayerCalledOutOfTurn,
     PlayerPlayedOutOfTurn,
+    InvalidRoundId,
     // Trick Errors
     TrickNotInitialized,
     InvalidPlay,
@@ -38,6 +39,7 @@ pub enum Error {
     PlayerAlreadyInGame,
     PlayerNotInGame,
     RoundIsNotOver,
+    RoundNotInProgress,
     GameOver,
     // Miscellaneous
     ImpossibleCondition,

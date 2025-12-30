@@ -3,7 +3,7 @@ use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
-pub(crate) struct Call(u8);
+pub struct Call(u8);
 
 impl Call {
     pub fn new(call: u8) -> Result<Self> {

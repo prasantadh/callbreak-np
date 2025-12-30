@@ -1,5 +1,10 @@
+use std::array;
+
 use super::{Call, Card, Player, Round, Turn};
-use crate::{Error, Result};
+use crate::{
+    Error, Result,
+    game::{Hand, RoundId, Trick},
+};
 
 use rand::{rng, seq::SliceRandom};
 use serde::Serialize;
@@ -154,7 +159,7 @@ impl Game {
         }
     }
 
-    pub fn get_hand(&self, player: &str) -> Result<Vec<Card>> {
+    pub fn get_hand(&self, player: &str) -> Result<Hand> {
         let turn = self.player_id_to_turn(player)?;
         Ok(self
             .rounds
@@ -179,6 +184,31 @@ impl Game {
 
     pub fn is_over(&self) -> bool {
         self.state() == State::Over
+    }
+
+    pub fn get_calls(&self, round_id: RoundId) -> [Option<Call>; 4] {
+        match &self.rounds[round_id] {
+            Some(round) => round.get_calls(),
+            None => array::from_fn(|_| None),
+        }
+    }
+
+    pub fn get_current_round_id(&self) -> Result<RoundId> {
+        match self.state() {
+            State::RoundInProgress => {
+                let id = self.rounds.iter().flatten().count() - 1;
+                Ok(RoundId::new(id).expect("must be a valid round id"))
+            }
+            _ => Err(Error::RoundNotInProgress),
+        }
+    }
+
+    // TODO: may be the return type for this function needs to be an option?
+    pub fn get_tricks(&self, round_id: RoundId) -> Vec<Trick> {
+        match &self.rounds[round_id] {
+            Some(round) => round.get_tricks(),
+            None => vec![],
+        }
     }
 }
 
@@ -271,13 +301,13 @@ mod test {
             assert!(
                 game.get_hand(&i.to_string())
                     .unwrap()
-                    .iter()
+                    .filter(|_| true)
                     .any(|c| c.get_suit() == Spades),
             );
             assert!(
                 game.get_hand(&i.to_string())
                     .unwrap()
-                    .iter()
+                    .filter(|_| true)
                     .any(|c| c.get_rank() >= Jack)
             );
         }
