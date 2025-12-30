@@ -28,6 +28,7 @@ impl Host {
     }
 
     pub fn run(&mut self) {
+        // FIXME: should return an error if there are not currently 4 players
         for _round in 0..5 {
             // request a call
             for _turn in 0..4 {
