@@ -1,6 +1,9 @@
+use crate::Result;
 use crate::deck::{Card, Rank, Suit};
+use crate::game::Call;
 
-use crate::{Call, Result, agent::Agent, playerview::PlayerView};
+use super::Agent;
+use crate::playerview::PlayerView; // TODO: look into this path
 
 pub struct Bot;
 

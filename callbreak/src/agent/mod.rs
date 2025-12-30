@@ -1,9 +1,11 @@
 mod bot;
+
+use crate::Result;
 use crate::deck::Card;
+use crate::game::Call;
+use crate::playerview::PlayerView;
 
-use crate::{Call, Result, playerview::PlayerView};
-
-pub trait Agent {
+pub(crate) trait Agent {
     fn call(&self, view: &PlayerView) -> Result<Call>;
     fn play(&self, view: &PlayerView) -> Result<Card>;
     // potentially important to send the periodic update to the user

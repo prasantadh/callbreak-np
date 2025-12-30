@@ -1,6 +1,4 @@
-use crate::Card;
-use crate::deck::Rank;
-use crate::deck::Suit;
+use super::{Card, Rank, Suit};
 
 use rand::{rng, seq::SliceRandom};
 use serde::{Deserialize, Serialize};

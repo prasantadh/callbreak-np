@@ -1,9 +1,8 @@
+use super::{Hand, Turn};
 use crate::deck::{Card, Suit};
-use serde::{Deserialize, Serialize};
-
-use crate::Hand;
-use crate::Turn;
 use crate::{Error, Result};
+
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Trick {

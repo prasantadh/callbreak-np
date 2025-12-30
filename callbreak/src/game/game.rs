@@ -1,8 +1,5 @@
-use crate::Call;
-use crate::Card;
-use crate::Player;
-use crate::Round;
-use crate::Turn;
+use crate::deck::Card;
+use crate::game::{Call, Player, Round, Turn};
 use crate::{Error, Result};
 
 use rand::{rng, seq::SliceRandom};
