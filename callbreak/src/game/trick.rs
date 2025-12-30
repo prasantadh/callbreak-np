@@ -1,5 +1,4 @@
-use super::{Hand, Turn};
-use crate::deck::{Card, Suit};
+use super::{Card, Hand, Suit, Turn};
 use crate::{Error, Result};
 
 use serde::{Deserialize, Serialize};
@@ -136,8 +135,8 @@ impl Trick {
 mod tests {
 
     use super::*;
-    use crate::deck::Rank::*;
-    use crate::deck::Suit::*;
+    use crate::game::Rank::*;
+    use crate::game::Suit::*;
 
     fn random_turn() -> Turn {
         Turn::new(rand::random_range(0..=3))

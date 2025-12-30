@@ -1,4 +1,5 @@
 mod call;
+mod deck;
 mod game;
 mod hand;
 mod player;
@@ -7,6 +8,7 @@ mod trick;
 mod turn;
 
 pub(crate) use call::Call;
+pub(crate) use deck::{Card, Deck, Rank, Suit};
 pub(crate) use game::Game;
 use hand::Hand;
 use player::Player;

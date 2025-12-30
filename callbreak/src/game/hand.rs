@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use crate::{Error, Result};
 
-use crate::deck::{Card, Rank, Suit};
+use super::{Card, Rank, Suit};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

@@ -1,5 +1,5 @@
 use super::{Call, Hand, Trick, Turn};
-use crate::deck::{Card, Deck};
+use super::{Card, Deck};
 use crate::{Error, Result};
 
 use serde::Serialize;

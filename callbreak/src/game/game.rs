@@ -1,5 +1,4 @@
-use crate::deck::Card;
-use crate::game::{Call, Player, Round, Turn};
+use super::{Call, Card, Player, Round, Turn};
 use crate::{Error, Result};
 
 use rand::{rng, seq::SliceRandom};
@@ -186,8 +185,8 @@ impl Game {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::deck::Rank::*;
-    use crate::deck::Suit::*;
+    use crate::game::Rank::*;
+    use crate::game::Suit::*;
 
     #[test]
     fn can_play_to_completion() {

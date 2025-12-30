@@ -1,6 +1,5 @@
 use crate::Result;
-use crate::deck::{Card, Rank, Suit};
-use crate::game::Call;
+use crate::game::{Call, Card, Rank, Suit};
 
 use super::Agent;
 use crate::playerview::PlayerView; // TODO: look into this path

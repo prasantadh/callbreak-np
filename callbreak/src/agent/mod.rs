@@ -1,8 +1,7 @@
 mod bot;
 
 use crate::Result;
-use crate::deck::Card;
-use crate::game::Call;
+use crate::game::{Call, Card};
 use crate::playerview::PlayerView;
 
 pub(crate) trait Agent {

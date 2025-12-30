@@ -1,5 +1,4 @@
 mod agent;
-mod deck;
 mod error;
 mod game;
 mod host;
