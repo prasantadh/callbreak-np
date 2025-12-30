@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "lowercase")]
-pub enum Rank {
+pub(crate) enum Rank {
     Two,
     Three,
     Four,

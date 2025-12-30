@@ -4,7 +4,7 @@ use rand::{rng, seq::SliceRandom};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Deck {
+pub(crate) struct Deck {
     idx: usize,
     cards: Vec<Card>,
 }

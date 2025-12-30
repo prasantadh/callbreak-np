@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "lowercase")]
-pub enum Suit {
+pub(crate) enum Suit {
     Clubs,
     Diamonds,
     Hearts,
