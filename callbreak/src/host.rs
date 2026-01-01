@@ -1,6 +1,7 @@
 use crate::Result;
 use crate::playerview::Context;
 use crate::{Game, agent::Agent, playerview::PlayerView};
+use tracing::debug;
 
 #[derive(Default)]
 pub struct Host {
@@ -18,6 +19,7 @@ impl Host {
 
     // add an agent
     pub fn add_agent(&mut self, id: String, agent: Box<dyn Agent>) -> Result<()> {
+        debug!(?id, ?agent, "attempting to add player to the game");
         self.game.add_player(&id)?;
         self.agents.push((id, agent));
         Ok(())
@@ -31,8 +33,10 @@ impl Host {
         // FIXME: should return an error if there are not currently 4 players
         for _round in 0..5 {
             // request a call
+            debug!(?_round);
             for _turn in 0..4 {
                 let player = self.game.turn().expect("the next turn must be available");
+                debug!(?player, "requesting call from ");
                 let (_, agent) = self
                     .agents
                     .iter()
@@ -46,13 +50,13 @@ impl Host {
                     "FIXME: if this errors, return error to agent. should make unfallible bot",
                 );
             }
-            println!("Round {_round} finished calling");
 
             // request a break
             for _trick in 0..13 {
+                debug!(?_trick);
                 for _turn in 0..4 {
                     let player = self.game.turn().expect("the next turn must be available");
-                    print!("{player:?} ");
+                    debug!(?player, "requesting break from");
                     let (_, agent) = self
                         .agents
                         .iter()

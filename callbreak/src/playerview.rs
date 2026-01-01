@@ -19,8 +19,7 @@ impl<'a> Context<'a> {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PlayerView {
     pub players: Vec<String>,
-    pub rounds: Vec<RoundView>, // FIXME: this struct needs to be enriched with the information that any bot might need to make
-                                // decisions about call or play
+    pub rounds: Vec<RoundView>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

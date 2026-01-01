@@ -3,11 +3,12 @@ use std::array;
 use super::{Call, Card, Player, Round, Turn};
 use crate::{
     Error, Result,
-    game::{Hand, RoundId, Trick},
+    game::{Hand, RoundId, Trick, player},
 };
 
 use rand::{rng, seq::SliceRandom};
 use serde::Serialize;
+use tracing::debug;
 
 #[derive(Debug, Default, Clone, Serialize)]
 pub(crate) struct Game {
@@ -61,6 +62,13 @@ impl Game {
                         let mut rng = rng();
                         self.players.shuffle(&mut rng);
                         self.rounds[0] = Some(Round::new(Turn::new(0)));
+                        let players: Vec<String> = self
+                            .players
+                            .iter()
+                            .flatten()
+                            .map(|p| p.get_id().to_string())
+                            .collect();
+                        debug!(?players, "players order after shuffle for the game");
                     }
                     Ok(())
                 }

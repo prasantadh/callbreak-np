@@ -1,7 +1,7 @@
 use super::{Card, Rank, Suit};
 use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::{collections::HashSet, fmt::Display};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(transparent)]
@@ -35,6 +35,8 @@ impl TryFrom<&[Card]> for Hand {
             has_face |= card.get_rank() >= Rank::Jack;
             has_spades |= card.get_suit() == Suit::Spades;
         }
+        let mut cards = cards.to_vec();
+        cards.sort();
         if !has_face {
             Err(Error::RequiresFaceCard)
         } else if !has_spades {
@@ -44,7 +46,16 @@ impl TryFrom<&[Card]> for Hand {
         } else if HashSet::<&Card>::from_iter(cards.iter()).len() != 13 {
             Err(Error::HasDuplicateCards)
         } else {
-            Ok(Self(cards.to_vec()))
+            Ok(Self(cards)) // TODO: sort the vector here by suit then rank?
         }
+    }
+}
+
+impl Display for Hand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for card in self.0.iter() {
+            write!(f, "{} of {}", card.get_rank(), card.get_suit())?
+        }
+        Ok(())
     }
 }

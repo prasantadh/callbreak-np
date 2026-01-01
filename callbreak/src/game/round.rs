@@ -1,10 +1,10 @@
 use super::{Call, Hand, Trick, Turn};
 use super::{Card, Deck};
 use crate::{Error, Result};
-
 use serde::{Deserialize, Serialize};
 use std::array;
 use std::ops::{Index, IndexMut};
+use tracing::debug;
 
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct Round {

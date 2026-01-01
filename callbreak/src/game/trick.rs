@@ -1,4 +1,6 @@
-use super::{Card, Hand, Suit, Turn};
+use std::fmt::Display;
+
+use super::{Card, Suit, Turn};
 use crate::{Error, Result};
 
 use serde::{Deserialize, Serialize};
@@ -145,10 +147,27 @@ impl Trick {
     }
 }
 
+impl Display for Trick {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Trick {{ starter: {}, cards: [", self.starter_turn)?;
+        for (i, card) in self.cards.iter().enumerate() {
+            match card {
+                Some(card) => write!(f, "{card}")?,
+                None => write!(f, "None")?,
+            }
+            if i != 3 {
+                write!(f, ", ")?;
+            }
+        }
+        write!(f, "]}}")
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
     use super::*;
+    use crate::game::Hand;
     use crate::game::Rank::*;
     use crate::game::Suit::*;
 
