@@ -1,4 +1,4 @@
-use crate::{Call, Card, Trick};
+use crate::game::{Call, Card, Trick};
 use serde::{Deserialize, Serialize};
 
 /// View of the whole game that will be sent to each player.

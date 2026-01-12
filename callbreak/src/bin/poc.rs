@@ -1,6 +1,7 @@
 use std::net::TcpListener;
 
-use callbreak::{BotAgent, Host, Net};
+use callbreak::Host;
+use callbreak::agent::{Bot, Net};
 use tracing_subscriber::{EnvFilter, fmt};
 use tungstenite::accept;
 fn main() {
@@ -13,7 +14,7 @@ fn main() {
         .init();
     let mut host = Host::new();
     for id in 0..3 {
-        let agent = Box::new(BotAgent);
+        let agent = Box::new(Bot);
         host.add_agent(id.to_string(), agent)
             .expect("must be able to add 4 players");
     }

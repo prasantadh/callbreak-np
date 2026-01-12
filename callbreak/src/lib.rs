@@ -1,13 +1,11 @@
-mod agent;
+pub mod agent;
 mod error;
-mod game;
+pub mod game;
 mod host;
 
-pub use agent::Bot as BotAgent;
-pub use agent::Net;
 pub use agent::{Agent, PlayerView, RoundView};
-pub use game::{Call, Card, Rank, Suit, Trick};
+pub use error::Error;
 pub use host::Host;
 
-use error::{Error, Result};
+use error::Result;
 use game::Game;
