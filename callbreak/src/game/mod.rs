@@ -6,17 +6,15 @@ mod trick;
 mod turn;
 
 pub use call::Call;
-pub(crate) use deck::Deck;
+use deck::Deck;
 pub use deck::{Card, Rank, Suit};
 pub use hand::Hand;
-pub use round::RoundId;
 pub use trick::Trick;
 
 use crate::{Error, PlayerView, Result, RoundView};
 use rand::{rng, seq::SliceRandom};
 use round::Round;
 use serde::Serialize;
-use std::array;
 use tracing::debug;
 use turn::Turn;
 
@@ -169,57 +167,12 @@ impl Game {
         }
     }
 
-    pub(crate) fn get_hand(&self, player: &str) -> Result<Hand> {
-        let turn = self.player_id_to_turn(player)?;
-        Ok(self
-            .rounds
-            .iter()
-            .rev()
-            .find_map(|r| r.as_ref())
-            .expect("must always have Some(round)")
-            .get_hand(turn)
-            .clone())
-    }
-
-    pub(crate) fn get_players(&self) -> Vec<String> {
-        self.players
-            .iter()
-            .flatten()
-            .map(|p| p.to_string())
-            .collect()
-    }
-
     pub(crate) fn is_ready(&self) -> bool {
         self.state() == State::RoundInProgress
     }
 
     pub(crate) fn is_over(&self) -> bool {
         self.state() == State::Over
-    }
-
-    fn get_calls(&self, round_id: RoundId) -> [Option<Call>; 4] {
-        match &self.rounds[round_id] {
-            Some(round) => round.get_calls().clone(),
-            None => array::from_fn(|_| None),
-        }
-    }
-
-    pub(crate) fn get_current_round_id(&self) -> Result<RoundId> {
-        match self.state() {
-            State::RoundInProgress => {
-                let id = self.rounds.iter().flatten().count() - 1;
-                Ok(RoundId::new(id).expect("must be a valid round id"))
-            }
-            _ => Err(Error::RoundNotInProgress),
-        }
-    }
-
-    // TODO: may be the return type for this function needs to be an option?
-    pub(crate) fn get_tricks(&self, round_id: RoundId) -> Vec<Trick> {
-        match &self.rounds[round_id] {
-            Some(round) => round.get_tricks().iter().flatten().cloned().collect(),
-            None => vec![],
-        }
     }
 
     pub(crate) fn build_view_for(&self, player: &Player) -> Result<PlayerView> {
@@ -337,16 +290,17 @@ mod test {
         for i in 0..4 {
             game.add_player(&i.to_string()).unwrap();
         }
+        let round = game.rounds[0].as_mut().unwrap();
         for i in 0..4 {
             assert!(
-                game.get_hand(&i.to_string())
-                    .unwrap()
+                round
+                    .get_hand(Turn::new(i))
                     .filter(|_| true)
                     .any(|c| c.get_suit() == Spades),
             );
             assert!(
-                game.get_hand(&i.to_string())
-                    .unwrap()
+                round
+                    .get_hand(Turn::new(i))
                     .filter(|_| true)
                     .any(|c| c.get_rank() >= Jack)
             );
@@ -360,7 +314,7 @@ mod test {
         for turn in 0..4 {
             game.add_player(turn.to_string().as_str()).unwrap();
         }
-        let players = game.get_players();
+        let players: Vec<String> = game.players.iter().flatten().cloned().collect();
 
         for round in 0..5 {
             for turn in 0..4 {
@@ -395,7 +349,7 @@ mod test {
             let player = game.turn().unwrap();
             game.call(&player, Call::new(3).unwrap()).unwrap();
         }
-        let players = game.get_players();
+        let players: Vec<String> = game.players.iter().flatten().cloned().collect();
         let action = game.play(&players[1], Card::new(Six, Diamonds));
         // ^ what card is used doesn't really matter
         assert_eq!(action, Err(Error::NotYourTurn));

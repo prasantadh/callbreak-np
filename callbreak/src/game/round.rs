@@ -1,9 +1,8 @@
 use super::{Call, Hand, Trick, Turn};
 use super::{Card, Deck};
 use crate::{Error, Result};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::array;
-use std::ops::{Index, IndexMut};
 
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct Round {
@@ -177,51 +176,6 @@ impl Round {
 
     pub(crate) fn is_over(&self) -> bool {
         self.state() == State::Over
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Serialize, Deserialize)]
-pub struct RoundId(usize);
-impl RoundId {
-    pub fn new(value: usize) -> Result<Self> {
-        match value {
-            v if v < 5 => Ok(RoundId(value)),
-            _ => Err(Error::InvalidRoundId),
-        }
-    }
-
-    pub fn max() -> Self {
-        Self(5)
-    }
-}
-impl From<RoundId> for usize {
-    fn from(value: RoundId) -> Self {
-        value.0
-    }
-}
-impl<T> Index<RoundId> for Vec<T> {
-    type Output = T;
-    fn index(&self, index: RoundId) -> &Self::Output {
-        self.index(index.0)
-    }
-}
-
-impl<T> IndexMut<RoundId> for Vec<T> {
-    fn index_mut(&mut self, index: RoundId) -> &mut Self::Output {
-        &mut self[index.0]
-    }
-}
-
-impl<T> Index<RoundId> for [T] {
-    type Output = T;
-    fn index(&self, index: RoundId) -> &Self::Output {
-        self.index(index.0)
-    }
-}
-
-impl<T> IndexMut<RoundId> for [T] {
-    fn index_mut(&mut self, index: RoundId) -> &mut Self::Output {
-        &mut self[index.0]
     }
 }
 
