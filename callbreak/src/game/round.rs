@@ -4,7 +4,6 @@ use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
 use std::array;
 use std::ops::{Index, IndexMut};
-use tracing::debug;
 
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct Round {
@@ -169,7 +168,7 @@ impl Round {
     }
 
     pub(crate) fn get_calls(&self) -> [Option<Call>; 4] {
-        self.calls.into()
+        self.calls
     }
 
     pub(crate) fn get_tricks(&self) -> Vec<Trick> {
