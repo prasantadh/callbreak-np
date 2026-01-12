@@ -3,7 +3,7 @@ use std::array;
 use super::{Call, Card, Player, Round, Turn};
 use crate::{
     Error, Result,
-    game::{Hand, RoundId, Trick, player},
+    game::{Hand, RoundId, Trick},
 };
 
 use rand::{rng, seq::SliceRandom};
@@ -24,7 +24,7 @@ enum State {
 }
 
 impl Game {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 

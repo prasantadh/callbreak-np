@@ -49,7 +49,7 @@ impl Display for Card {
 
 #[derive(Debug)]
 // TODO: temporary struct for printing a vector of cards. Is this the correct way?
-pub(crate) struct Cards<'a>(pub(crate) &'a [Card]);
+pub struct Cards<'a>(pub(crate) &'a [Card]);
 impl Display for Cards<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Cards: [")?;

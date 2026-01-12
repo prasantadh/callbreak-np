@@ -1,13 +1,11 @@
-use std::fmt::Display;
-
 use super::{Card, Suit, Turn};
 use crate::{Error, Result};
-
 use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Trick {
-    starter_turn: Turn,
+    starter: Turn,
     cards: [Option<Card>; 4],
 }
 
@@ -18,7 +16,7 @@ impl Trick {
     // on second thought, why should this support deserialization at all?!
     pub(crate) fn new(starter: Turn) -> Self {
         Trick {
-            starter_turn: starter,
+            starter,
             cards: [None; 4],
         }
     }
@@ -38,7 +36,7 @@ impl Trick {
         if self.is_over() {
             Err(Error::NotAcceptingPlay)
         } else {
-            let mut turn = self.starter_turn;
+            let mut turn = self.starter;
             while self.cards[turn].is_some() {
                 // this loop must terminate because the trick is not over
                 turn = turn.next();
@@ -52,7 +50,7 @@ impl Trick {
     }
 
     pub(crate) fn starter(&self) -> (Turn, Option<Card>) {
-        (self.starter_turn, self.cards[self.starter_turn])
+        (self.starter, self.cards[self.starter])
     }
 
     pub(crate) fn winner(&self) -> Option<(Turn, Card)> {
@@ -149,7 +147,7 @@ impl Trick {
 
 impl Display for Trick {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Trick {{ starter: {}, cards: [", self.starter_turn)?;
+        write!(f, "Trick {{ starter: {}, cards: [", self.starter)?;
         for (i, card) in self.cards.iter().enumerate() {
             match card {
                 Some(card) => write!(f, "{card}")?,

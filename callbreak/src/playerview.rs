@@ -16,13 +16,13 @@ impl<'a> Context<'a> {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PlayerView {
     pub players: Vec<String>,
     pub rounds: Vec<RoundView>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RoundView {
     pub calls: [Option<Call>; 4],
     pub hand: Vec<Card>,

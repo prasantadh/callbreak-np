@@ -25,10 +25,6 @@ impl Host {
         Ok(())
     }
 
-    pub(crate) fn is_ready(&self) -> bool {
-        self.game.is_ready()
-    }
-
     pub fn run(&mut self) {
         // FIXME: should return an error if there are not currently 4 players
         for _round in 0..5 {
@@ -39,12 +35,13 @@ impl Host {
                 debug!(?player, "requesting call from ");
                 let (_, agent) = self
                     .agents
-                    .iter()
+                    .iter_mut()
                     .find(|(id, _)| id == &player)
                     .expect("player must be in agents list");
-                let view = PlayerView::from(Context::new(&self.game, &player));
+                let playerview = PlayerView::from(Context::new(&self.game, &player));
+                debug!(?playerview);
                 let call = agent
-                    .call(&view)
+                    .call(&playerview)
                     .expect("FIXME: when error, swap out with a bot");
                 self.game.call(&player, call).expect(
                     "FIXME: if this errors, return error to agent. should make unfallible bot",
@@ -59,7 +56,7 @@ impl Host {
                     debug!(?player, "requesting break from");
                     let (_, agent) = self
                         .agents
-                        .iter()
+                        .iter_mut()
                         .find(|(id, _)| id == &player)
                         .expect("player must be in agents list");
                     let view = PlayerView::from(Context::new(&self.game, &player));

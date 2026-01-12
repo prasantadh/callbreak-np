@@ -43,6 +43,9 @@ pub enum Error {
     GameOver,
     // Miscellaneous
     ImpossibleCondition,
+    // Agent Error
+    AgentSendError,
+    AgentRecvError,
 }
 
 impl std::error::Error for Error {}
