@@ -1,6 +1,5 @@
-use std::fmt::{self, Display};
-
 use serde::{Deserialize, Serialize};
+use std::fmt::{self, Display};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "lowercase")]
@@ -21,7 +20,11 @@ pub enum Rank {
 }
 
 impl Rank {
-    pub const ALL: &[Self] = &[
+    // INFO:: there was some thought on if Rank and Suit should implement Iterator
+    // instead of using ALL but there is no advantage and iterator requires keeping
+    // additional information on state of the iterator. That is easier for structs
+    // but cumbersome for enums. Let it be ALL.
+    pub(crate) const ALL: &[Self] = &[
         Self::Two,
         Self::Three,
         Self::Four,

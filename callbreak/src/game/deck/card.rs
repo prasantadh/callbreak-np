@@ -14,6 +14,9 @@ pub struct Card {
 impl Card {
     pub fn new(rank: Rank, suit: Suit) -> Self {
         // TODO: figure out a way to take both reference and owned values here
+        // INFO: This could be rewritten to take both Rank and  &Rank but knowing
+        // both Rank and Suit and very light enums, it is easier to just implement
+        // Copy on them and pass them as value
         Card { rank, suit }
     }
 

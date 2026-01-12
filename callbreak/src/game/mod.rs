@@ -8,7 +8,8 @@ mod trick;
 mod turn;
 
 pub use call::Call;
-pub use deck::{Card, Cards, Deck, Rank, Suit};
+pub(crate) use deck::Deck;
+pub use deck::{Card, Cards, Rank, Suit};
 pub(crate) use game::Game;
 pub use hand::Hand;
 use player::Player;

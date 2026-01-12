@@ -12,7 +12,7 @@ pub enum Suit {
 }
 
 impl Suit {
-    pub const ALL: &[Self] = &[Self::Clubs, Self::Diamonds, Self::Hearts, Self::Spades];
+    pub(crate) const ALL: &[Self] = &[Self::Clubs, Self::Diamonds, Self::Hearts, Self::Spades];
 }
 
 impl Display for Suit {
