@@ -13,36 +13,20 @@ pub enum Error {
     RequiresSpades,
     Not13Cards,
     HasDuplicateCards,
-    // Player Errors
-    PlayerAlreadyCalled,
-    TurnIsAlreadySet,
     // Round Errors
-    AllCallsNeededBeforeAnyPlay,
     RoundIsOver,
-    PlayerCalledOutOfTurn,
-    PlayerPlayedOutOfTurn,
-    InvalidRoundId,
     // Trick Errors
-    TrickNotInitialized,
     InvalidPlay,
-    TrickIsOver,
-    NoTrickWinnerYet,
     // Turn Errors
-    InvalidValueForTurn,
     NotYourTurn,
     // Game Errors,
     NotAcceptingNewPlayers,
     NotAcceptingCalls,
     NotAcceptingPlay,
-    GameHasMaxPossiblePlayers,
-    NotEnoughPlayers,
     PlayerAlreadyInGame,
     PlayerNotInGame,
     RoundIsNotOver,
     RoundNotInProgress,
-    GameOver,
-    // Miscellaneous
-    ImpossibleCondition,
     // Agent Error
     AgentSend,
     AgentRecv,
