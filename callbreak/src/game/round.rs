@@ -172,7 +172,6 @@ impl Round {
     }
 
     pub(crate) fn get_tricks(&self) -> &[Option<Trick>] {
-        // TODO: there is probably some performance optimizations to be had here
         &self.tricks
     }
 
