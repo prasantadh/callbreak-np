@@ -1,7 +1,6 @@
 mod call;
 mod deck;
 mod hand;
-mod player;
 mod round;
 mod trick;
 mod turn;
@@ -10,17 +9,19 @@ pub use call::Call;
 pub(crate) use deck::Deck;
 pub use deck::{Card, Cards, Rank, Suit};
 pub use hand::Hand;
-use player::Player;
-use round::Round;
 pub use round::RoundId;
 pub use trick::Trick;
-use turn::Turn;
 
 use crate::{Error, Result};
+// use player::Player;
 use rand::{rng, seq::SliceRandom};
+use round::Round;
 use serde::Serialize;
 use std::array;
 use tracing::debug;
+use turn::Turn;
+
+type Player = String;
 
 #[derive(Debug, Default, Clone, Serialize)]
 pub(crate) struct Game {
@@ -57,19 +58,14 @@ impl Game {
     pub fn add_player(&mut self, id: &str) -> Result<()> {
         match self.state() {
             State::Lobby => {
-                if self
-                    .players
-                    .iter()
-                    .flatten()
-                    .any(|player| player.get_id() == id)
-                {
+                if self.players.iter().flatten().any(|player| player == id) {
                     Err(Error::PlayerAlreadyInGame)
                 } else {
                     self.players
                         .iter_mut()
                         .find(|slot| slot.is_none())
                         .expect("an empty slot is expected in the Lobby")
-                        .replace(Player::new(id));
+                        .replace(id.to_string());
                     if self.state() == State::RoundInProgress {
                         let mut rng = rng();
                         self.players.shuffle(&mut rng);
@@ -78,7 +74,7 @@ impl Game {
                             .players
                             .iter()
                             .flatten()
-                            .map(|p| p.get_id().to_string())
+                            .map(|p| p.to_string())
                             .collect();
                         debug!(?players, "players order after shuffle for the game");
                     }
@@ -96,7 +92,7 @@ impl Game {
                     .players
                     .iter()
                     .flatten()
-                    .position(|player| player.get_id() == player_id)
+                    .position(|player| player == player_id)
                 {
                     Ok(Turn::new(turn))
                 } else {
@@ -157,7 +153,6 @@ impl Game {
                 Ok(self.players[turn]
                     .as_ref()
                     .expect("must have all players in this state")
-                    .get_id()
                     .to_string())
             }
             _ => Err(Error::NotYourTurn),
@@ -194,7 +189,7 @@ impl Game {
         self.players
             .iter()
             .flatten()
-            .map(|p| p.get_id().to_string())
+            .map(|p| p.to_string())
             .collect()
     }
 
