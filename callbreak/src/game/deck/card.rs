@@ -49,19 +49,3 @@ impl Display for Card {
         write!(f, "{{{}: {}}}", self.get_rank(), self.get_suit())
     }
 }
-
-#[derive(Debug)]
-// TODO: temporary struct for printing a vector of cards. Is this the correct way?
-pub struct Cards<'a>(pub(crate) &'a [Card]);
-impl Display for Cards<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Cards: [")?;
-        for (i, card) in self.0.iter().enumerate() {
-            write!(f, "{card}")?;
-            if i != self.0.len() - 1 {
-                write!(f, ", ")?;
-            }
-        }
-        write!(f, "]")
-    }
-}
