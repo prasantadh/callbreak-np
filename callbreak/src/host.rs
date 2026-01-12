@@ -24,6 +24,14 @@ impl Host {
         Ok(())
     }
 
+    pub fn is_ready(&self) -> bool {
+        self.game.is_ready()
+    }
+
+    pub fn is_over(&self) -> bool {
+        self.game.is_over()
+    }
+
     pub fn run(&mut self) {
         // FIXME: should return an error if there are not currently 4 players
         for _round in 0..5 {
@@ -70,6 +78,9 @@ impl Host {
                     let play = agent
                         .play(&playerview)
                         .expect("FIXME: when error, swap out with a bot");
+                    // FIXME: temporary fix to get rid of dead code warning. but if this condition
+                    // is not met, the user is messing around with us. swap out with a bot.
+                    assert!(self.game.get_valid_moves(&player).unwrap().contains(&play));
                     self.game.play(&player, play).expect("FIXME: if this errors, return error to agent or make a move from the unfallible bot");
                 }
             }
