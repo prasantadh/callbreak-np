@@ -1,14 +1,15 @@
 mod bot;
 mod net;
+mod view;
 
 use std::fmt::Debug;
 
 pub use bot::Bot;
 pub use net::Net;
+pub use view::{PlayerView, RoundView};
 
 use crate::Result;
 use crate::game::{Call, Card};
-use crate::playerview::PlayerView;
 
 // TODO: figure out the : syntax while defining trait
 pub trait Agent: Debug {

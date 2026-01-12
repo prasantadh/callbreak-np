@@ -1,6 +1,5 @@
 use crate::Result;
-use crate::playerview::Context;
-use crate::{Game, agent::Agent, playerview::PlayerView};
+use crate::{Game, agent::Agent};
 use tracing::debug;
 
 #[derive(Default)]
@@ -38,7 +37,10 @@ impl Host {
                     .iter_mut()
                     .find(|(id, _)| id == &player)
                     .expect("player must be in agents list");
-                let playerview = PlayerView::from(Context::new(&self.game, &player));
+                let playerview = self
+                    .game
+                    .build_view_for(&player)
+                    .expect("must have a view for this player");
                 debug!(?playerview);
                 let call = agent
                     .call(&playerview)
@@ -59,9 +61,14 @@ impl Host {
                         .iter_mut()
                         .find(|(id, _)| id == &player)
                         .expect("player must be in agents list");
-                    let view = PlayerView::from(Context::new(&self.game, &player));
+                    let playerview = self
+                        .game
+                        .build_view_for(&player)
+                        .expect("must have a view for this player");
+                    // FIXME: figure out a better way of displaying playerview
+                    debug!(?playerview);
                     let play = agent
-                        .play(&view)
+                        .play(&playerview)
                         .expect("FIXME: when error, swap out with a bot");
                     self.game.play(&player, play).expect("FIXME: if this errors, return error to agent or make a move from the unfallible bot");
                 }

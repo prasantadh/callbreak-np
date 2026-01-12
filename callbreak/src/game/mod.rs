@@ -7,13 +7,12 @@ mod turn;
 
 pub use call::Call;
 pub(crate) use deck::Deck;
-pub use deck::{Card, Cards, Rank, Suit};
+pub use deck::{Card, Rank, Suit};
 pub use hand::Hand;
 pub use round::RoundId;
 pub use trick::Trick;
 
-use crate::{Error, Result};
-// use player::Player;
+use crate::{Error, PlayerView, Result, RoundView};
 use rand::{rng, seq::SliceRandom};
 use round::Round;
 use serde::Serialize;
@@ -37,10 +36,6 @@ enum State {
 }
 
 impl Game {
-    pub(crate) fn new() -> Self {
-        Self::default()
-    }
-
     fn state(&self) -> State {
         if self.players.iter().any(|v| v.as_ref().is_none()) {
             State::Lobby
@@ -55,7 +50,7 @@ impl Game {
         }
     }
 
-    pub fn add_player(&mut self, id: &str) -> Result<()> {
+    pub(crate) fn add_player(&mut self, id: &str) -> Result<()> {
         match self.state() {
             State::Lobby => {
                 if self.players.iter().flatten().any(|player| player == id) {
@@ -103,7 +98,7 @@ impl Game {
         }
     }
 
-    pub fn call(&mut self, player_id: &str, call: Call) -> Result<()> {
+    pub(crate) fn call(&mut self, player_id: &str, call: Call) -> Result<()> {
         match self.state() {
             State::RoundInProgress => {
                 let turn = self.player_id_to_turn(player_id)?;
@@ -118,7 +113,7 @@ impl Game {
         }
     }
 
-    pub fn play(&mut self, player_id: &str, card: Card) -> Result<()> {
+    pub(crate) fn play(&mut self, player_id: &str, card: Card) -> Result<()> {
         match self.state() {
             State::RoundInProgress => {
                 let turn = self.player_id_to_turn(player_id)?;
@@ -140,7 +135,7 @@ impl Game {
         }
     }
 
-    pub fn turn(&self) -> Result<String> {
+    pub(crate) fn turn(&self) -> Result<String> {
         match self.state() {
             State::RoundInProgress => {
                 let turn = self
@@ -159,7 +154,7 @@ impl Game {
         }
     }
 
-    pub fn get_valid_moves(&self, player: &str) -> Result<Vec<Card>> {
+    pub(crate) fn get_valid_moves(&self, player: &str) -> Result<Vec<Card>> {
         match self.state() {
             State::RoundInProgress => {
                 let turn = self.player_id_to_turn(player)?;
@@ -174,7 +169,7 @@ impl Game {
         }
     }
 
-    pub fn get_hand(&self, player: &str) -> Result<Hand> {
+    pub(crate) fn get_hand(&self, player: &str) -> Result<Hand> {
         let turn = self.player_id_to_turn(player)?;
         Ok(self
             .rounds
@@ -182,10 +177,11 @@ impl Game {
             .rev()
             .find_map(|r| r.as_ref())
             .expect("must always have Some(round)")
-            .get_hand(turn))
+            .get_hand(turn)
+            .clone())
     }
 
-    pub fn get_players(&self) -> Vec<String> {
+    pub(crate) fn get_players(&self) -> Vec<String> {
         self.players
             .iter()
             .flatten()
@@ -193,22 +189,22 @@ impl Game {
             .collect()
     }
 
-    pub fn is_ready(&self) -> bool {
+    pub(crate) fn is_ready(&self) -> bool {
         self.state() == State::RoundInProgress
     }
 
-    pub fn is_over(&self) -> bool {
+    pub(crate) fn is_over(&self) -> bool {
         self.state() == State::Over
     }
 
-    pub fn get_calls(&self, round_id: RoundId) -> [Option<Call>; 4] {
+    fn get_calls(&self, round_id: RoundId) -> [Option<Call>; 4] {
         match &self.rounds[round_id] {
-            Some(round) => round.get_calls(),
+            Some(round) => round.get_calls().clone(),
             None => array::from_fn(|_| None),
         }
     }
 
-    pub fn get_current_round_id(&self) -> Result<RoundId> {
+    pub(crate) fn get_current_round_id(&self) -> Result<RoundId> {
         match self.state() {
             State::RoundInProgress => {
                 let id = self.rounds.iter().flatten().count() - 1;
@@ -219,10 +215,39 @@ impl Game {
     }
 
     // TODO: may be the return type for this function needs to be an option?
-    pub fn get_tricks(&self, round_id: RoundId) -> Vec<Trick> {
+    pub(crate) fn get_tricks(&self, round_id: RoundId) -> Vec<Trick> {
         match &self.rounds[round_id] {
-            Some(round) => round.get_tricks(),
+            Some(round) => round.get_tricks().iter().flatten().cloned().collect(),
             None => vec![],
+        }
+    }
+
+    pub(crate) fn build_view_for(&self, player: &Player) -> Result<PlayerView> {
+        match self.state() {
+            State::Lobby => Ok(PlayerView {
+                players: self.players.iter().flatten().cloned().collect(),
+                rounds: vec![],
+            }),
+            _ => {
+                // there is more to do here
+                let mut rounds = vec![];
+                for round in self.rounds.iter().flatten() {
+                    let roundview = RoundView {
+                        calls: *round.get_calls(),
+                        hand: round
+                            .get_hand(self.player_id_to_turn(player)?)
+                            .filter(|_| true)
+                            .cloned()
+                            .collect(),
+                        tricks: round.get_tricks().iter().flatten().cloned().collect(),
+                    };
+                    rounds.push(roundview);
+                }
+                Ok(PlayerView {
+                    players: self.players.iter().flatten().cloned().collect(),
+                    rounds,
+                })
+            }
         }
     }
 }
@@ -235,7 +260,7 @@ mod test {
 
     #[test]
     fn can_play_to_completion() {
-        let mut game = Game::new();
+        let mut game = Game::default();
 
         for turn in 0..4 {
             game.add_player(turn.to_string().as_str()).unwrap();
@@ -258,7 +283,7 @@ mod test {
 
     #[test]
     fn cannot_add_same_player_twice() {
-        let mut game = Game::new();
+        let mut game = Game::default();
         game.add_player("0").unwrap();
         let action = game.add_player("0");
         assert_eq!(action, Err(Error::PlayerAlreadyInGame))
@@ -266,7 +291,7 @@ mod test {
 
     #[test]
     fn cannot_add_more_than_four_players() {
-        let mut game = Game::new();
+        let mut game = Game::default();
         for i in 0..4 {
             game.add_player(&i.to_string()).unwrap();
         }
@@ -276,7 +301,7 @@ mod test {
 
     #[test]
     fn cannot_call_before_all_players_have_joined() {
-        let mut game = Game::new();
+        let mut game = Game::default();
         game.add_player("0").unwrap();
         let action = game.call("0", Call::new(3).unwrap());
         assert_eq!(action, Err(Error::NotAcceptingCalls))
@@ -284,7 +309,7 @@ mod test {
 
     #[test]
     fn cannot_call_out_of_turn() {
-        let mut game = Game::new();
+        let mut game = Game::default();
         for i in 0..4 {
             game.add_player(i.to_string().as_str()).unwrap();
         }
@@ -298,7 +323,7 @@ mod test {
 
     #[test]
     fn cannot_play_while_in_lobby() {
-        let mut game = Game::new();
+        let mut game = Game::default();
         for i in 0..3 {
             game.add_player(&i.to_string()).unwrap();
         }
@@ -308,7 +333,7 @@ mod test {
 
     #[test]
     fn each_player_has_a_spade_card_and_a_face_card() {
-        let mut game = Game::new();
+        let mut game = Game::default();
         for i in 0..4 {
             game.add_player(&i.to_string()).unwrap();
         }
@@ -330,7 +355,7 @@ mod test {
 
     #[test]
     fn round_i_must_be_started_by_turn_i() {
-        let mut game = Game::new();
+        let mut game = Game::default();
 
         for turn in 0..4 {
             game.add_player(turn.to_string().as_str()).unwrap();
@@ -362,7 +387,7 @@ mod test {
 
     #[test]
     fn cannot_play_out_of_turn() {
-        let mut game = Game::new();
+        let mut game = Game::default();
         for turn in 0..4 {
             game.add_player(turn.to_string().as_str()).unwrap();
         }

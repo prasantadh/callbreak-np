@@ -163,17 +163,17 @@ impl Round {
         }
     }
 
-    pub(crate) fn get_hand(&self, turn: Turn) -> Hand {
-        self.hands[turn].clone()
+    pub(crate) fn get_hand(&self, turn: Turn) -> &Hand {
+        &self.hands[turn]
     }
 
-    pub(crate) fn get_calls(&self) -> [Option<Call>; 4] {
-        self.calls
+    pub(crate) fn get_calls(&self) -> &[Option<Call>; 4] {
+        &self.calls
     }
 
-    pub(crate) fn get_tricks(&self) -> Vec<Trick> {
+    pub(crate) fn get_tricks(&self) -> &[Option<Trick>] {
         // TODO: there is probably some performance optimizations to be had here
-        self.tricks.iter().flatten().cloned().collect()
+        &self.tricks
     }
 
     pub(crate) fn is_over(&self) -> bool {

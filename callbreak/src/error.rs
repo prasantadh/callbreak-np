@@ -44,8 +44,8 @@ pub enum Error {
     // Miscellaneous
     ImpossibleCondition,
     // Agent Error
-    AgentSendError,
-    AgentRecvError,
+    AgentSend,
+    AgentRecv,
 }
 
 impl std::error::Error for Error {}

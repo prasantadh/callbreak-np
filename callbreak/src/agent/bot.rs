@@ -1,7 +1,7 @@
 use super::Agent;
+use super::PlayerView;
 use crate::Result;
-use crate::game::{Call, Card};
-use crate::playerview::PlayerView; // TODO: look into this path
+use crate::game::{Call, Card}; // TODO: look into this path
 
 #[derive(Debug)]
 pub struct Bot;

@@ -1,8 +1,7 @@
-use super::Agent;
+use super::{Agent, PlayerView};
 use crate::{
     error::Error,
     game::{Call, Card},
-    playerview::PlayerView,
 };
 use serde::{Deserialize, Serialize};
 use std::net::TcpStream;
@@ -44,10 +43,7 @@ impl Net {
 
 impl Agent for Net {
     // add code here
-    fn call(
-        &mut self,
-        view: &crate::playerview::PlayerView,
-    ) -> crate::error::Result<crate::game::Call> {
+    fn call(&mut self, view: &super::PlayerView) -> crate::error::Result<crate::game::Call> {
         // send a call message in json
         let view = view.clone();
         let message = ServerMessage {
@@ -57,30 +53,25 @@ impl Agent for Net {
         let message = serde_json::to_string(&message).expect("must serialize without issue");
         self.transport
             .send(tungstenite::Message::Text(message.into()))
-            .map_err(|_| Error::AgentSendError)?;
+            .map_err(|_| Error::AgentSend)?;
 
         let c = ClientMessage::Call(Call::new(3).unwrap());
         let c = serde_json::to_string(&c).unwrap();
         debug!(?c);
 
         // deserialize the response into a ClientMessage then return to the server
-        let response = self.transport.read().map_err(|_| Error::AgentRecvError)?;
+        let response = self.transport.read().map_err(|_| Error::AgentRecv)?;
         let response = match response {
-            Message::Text(v) => {
-                serde_json::from_str(v.as_str()).map_err(|_| Error::AgentRecvError)?
-            }
-            _ => return Err(Error::AgentRecvError),
+            Message::Text(v) => serde_json::from_str(v.as_str()).map_err(|_| Error::AgentRecv)?,
+            _ => return Err(Error::AgentRecv),
         };
         match response {
             ClientMessage::Call(v) => Ok(v),
-            _ => Err(Error::AgentRecvError),
+            _ => Err(Error::AgentRecv),
         }
     }
 
-    fn play(
-        &mut self,
-        view: &crate::playerview::PlayerView,
-    ) -> crate::error::Result<crate::game::Card> {
+    fn play(&mut self, view: &super::PlayerView) -> crate::error::Result<crate::game::Card> {
         // send a break message in json
         let view = view.clone();
         let message = ServerMessage {
@@ -90,19 +81,17 @@ impl Agent for Net {
         let message = serde_json::to_string(&message).expect("must serialize without issue");
         self.transport
             .send(tungstenite::Message::Text(message.into()))
-            .map_err(|_| Error::AgentSendError)?;
+            .map_err(|_| Error::AgentSend)?;
 
         // deserialize the response into a ClientMessage then return to the server
-        let response = self.transport.read().map_err(|_| Error::AgentRecvError)?;
+        let response = self.transport.read().map_err(|_| Error::AgentRecv)?;
         let response = match response {
-            Message::Text(v) => {
-                serde_json::from_str(v.as_str()).map_err(|_| Error::AgentRecvError)?
-            }
-            _ => return Err(Error::AgentRecvError),
+            Message::Text(v) => serde_json::from_str(v.as_str()).map_err(|_| Error::AgentRecv)?,
+            _ => return Err(Error::AgentRecv),
         };
         match response {
             ClientMessage::Break(v) => Ok(v),
-            _ => Err(Error::AgentRecvError),
+            _ => Err(Error::AgentRecv),
         }
     }
 }
