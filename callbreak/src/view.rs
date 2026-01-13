@@ -1,17 +1,16 @@
 use crate::game::{Call, Card, Trick};
 use serde::{Deserialize, Serialize};
 
-/// View of the whole game that will be sent to each player.
-///
-/// Just experimenting with adding more details
+/// View of the game sent to each player
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PlayerView {
+pub struct Game {
     pub players: Vec<String>,
-    pub rounds: Vec<RoundView>,
+    pub rounds: Vec<Round>,
 }
 
+/// View of a round sent to each player
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct RoundView {
+pub struct Round {
     pub calls: [Option<Call>; 4],
     pub hand: Vec<Card>,
     pub tricks: Vec<Trick>,

@@ -11,7 +11,8 @@ pub use deck::{Card, Rank, Suit};
 pub use hand::Hand;
 pub use trick::Trick;
 
-use crate::{Error, PlayerView, Result, RoundView};
+use crate::view;
+use crate::{Error, Result};
 use rand::{rng, seq::SliceRandom};
 use round::Round;
 use serde::Serialize;
@@ -175,9 +176,9 @@ impl Game {
         self.state() == State::Over
     }
 
-    pub(crate) fn build_view_for(&self, player: &Player) -> Result<PlayerView> {
+    pub(crate) fn build_view_for(&self, player: &Player) -> Result<view::Game> {
         match self.state() {
-            State::Lobby => Ok(PlayerView {
+            State::Lobby => Ok(view::Game {
                 players: self.players.iter().flatten().cloned().collect(),
                 rounds: vec![],
             }),
@@ -185,7 +186,7 @@ impl Game {
                 // there is more to do here
                 let mut rounds = vec![];
                 for round in self.rounds.iter().flatten() {
-                    let roundview = RoundView {
+                    let roundview = view::Round {
                         calls: *round.get_calls(),
                         hand: round
                             .get_hand(self.player_id_to_turn(player)?)
@@ -196,7 +197,7 @@ impl Game {
                     };
                     rounds.push(roundview);
                 }
-                Ok(PlayerView {
+                Ok(view::Game {
                     players: self.players.iter().flatten().cloned().collect(),
                     rounds,
                 })

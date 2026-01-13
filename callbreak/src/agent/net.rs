@@ -1,6 +1,7 @@
-use super::{Agent, PlayerView};
+use super::Agent;
+use crate::view::Game;
 use crate::{
-    error::Error,
+    error::{Error, Result},
     game::{Call, Card},
 };
 use serde::{Deserialize, Serialize};
@@ -19,7 +20,7 @@ pub enum Action {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ServerMessage {
     action: Action,
-    state: PlayerView,
+    view: Game,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -43,12 +44,12 @@ impl Net {
 
 impl Agent for Net {
     // add code here
-    fn call(&mut self, view: &super::PlayerView) -> crate::error::Result<crate::game::Call> {
+    fn call(&mut self, view: &Game) -> Result<Call> {
         // send a call message in json
         let view = view.clone();
         let message = ServerMessage {
             action: Action::Call,
-            state: view,
+            view,
         };
         let message = serde_json::to_string(&message).expect("must serialize without issue");
         self.transport
@@ -71,12 +72,12 @@ impl Agent for Net {
         }
     }
 
-    fn play(&mut self, view: &super::PlayerView) -> crate::error::Result<crate::game::Card> {
+    fn play(&mut self, view: &Game) -> Result<Card> {
         // send a break message in json
         let view = view.clone();
         let message = ServerMessage {
             action: Action::Break,
-            state: view,
+            view,
         };
         let message = serde_json::to_string(&message).expect("must serialize without issue");
         self.transport

@@ -1,18 +1,18 @@
 use super::Agent;
-use super::PlayerView;
 use crate::Result;
-use crate::game::{Call, Card}; // TODO: look into this path
+use crate::game::{Call, Card};
+use crate::view::Game; // TODO: look into this path
 
 #[derive(Debug)]
 pub struct Bot;
 
 impl Agent for Bot {
-    fn call(&mut self, _view: &PlayerView) -> Result<Call> {
+    fn call(&mut self, _view: &Game) -> Result<Call> {
         let call = Call::new(1).expect("1 must be a valid call");
         Ok(call)
     }
 
-    fn play(&mut self, view: &PlayerView) -> Result<Card> {
+    fn play(&mut self, view: &Game) -> Result<Card> {
         let round = view
             .rounds
             .last()
