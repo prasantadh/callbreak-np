@@ -1,5 +1,6 @@
+use crate::Game;
 use crate::Result;
-use crate::{Game, agent::Agent};
+use crate::agent::AgentKind;
 use tracing::debug;
 
 #[derive(Default, Debug)]
@@ -7,7 +8,7 @@ pub struct Host {
     // TODO: I don't currently know the full implications of using Box<dyn> here. there seems to be
     // an altenative to use AgentKind enum with all options which seems to have performance
     // trade-offs
-    agents: Vec<(String, Box<dyn Agent>)>,
+    agents: Vec<(String, AgentKind)>,
     game: Game,
 }
 
@@ -17,7 +18,7 @@ impl Host {
     }
 
     // add an agent
-    pub fn add_agent(&mut self, id: String, agent: Box<dyn Agent>) -> Result<()> {
+    pub fn add_agent(&mut self, id: String, agent: AgentKind) -> Result<()> {
         debug!(?id, ?agent, "attempting to add player to the game");
         self.game.add_player(&id)?;
         self.agents.push((id, agent));
@@ -50,9 +51,7 @@ impl Host {
                     .build_view_for(&player)
                     .expect("must have a view for this player");
                 debug!(?playerview);
-                let call = agent
-                    .call(&playerview)
-                    .expect("FIXME: when error, swap out with a bot");
+                let call = agent.call(&playerview);
                 self.game.call(&player, call).expect(
                     "FIXME: if this errors, return error to agent. should make unfallible bot",
                 );
@@ -75,9 +74,7 @@ impl Host {
                         .expect("must have a view for this player");
                     // FIXME: figure out a better way of displaying playerview
                     debug!(?playerview);
-                    let play = agent
-                        .play(&playerview)
-                        .expect("FIXME: when error, swap out with a bot");
+                    let play = agent.play(&playerview);
                     // FIXME: temporary fix to get rid of dead code warning. but if this condition
                     // is not met, the user is messing around with us. swap out with a bot.
                     assert!(self.game.get_valid_moves(&player).unwrap().contains(&play));

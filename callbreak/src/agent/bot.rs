@@ -1,18 +1,16 @@
-use super::Agent;
-use crate::Result;
+use super::view::Game;
 use crate::game::{Call, Card};
-use crate::view::Game; // TODO: look into this path
 
+/// Agent to facilitate interaction with a bot
 #[derive(Debug)]
 pub struct Bot;
 
-impl Agent for Bot {
-    fn call(&mut self, _view: &Game) -> Result<Call> {
-        let call = Call::new(1).expect("1 must be a valid call");
-        Ok(call)
+impl Bot {
+    pub(super) fn call(&self, _view: &Game) -> Call {
+        Call::new(1).unwrap()
     }
 
-    fn play(&mut self, view: &Game) -> Result<Card> {
+    pub(super) fn play(&self, view: &Game) -> Card {
         let round = view
             .rounds
             .last()
@@ -21,10 +19,9 @@ impl Agent for Bot {
             .tricks
             .last()
             .expect("must have a valid trick on a valid round");
-        let card = *trick
+        *trick
             .valid_play_from(&round.hand)
             .first()
-            .expect("must have a valid card to play");
-        Ok(card)
+            .expect("must have a valid card to play")
     }
 }

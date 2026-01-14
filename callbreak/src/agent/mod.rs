@@ -1,28 +1,37 @@
 mod bot;
-mod net;
+mod human;
+mod view;
 
-use std::fmt::Debug;
-
-pub use bot::Bot;
-pub use net::Net;
-
-use crate::Result;
 use crate::game::{Call, Card};
-use crate::view::Game;
+pub use bot::Bot;
+pub use human::Human;
+pub use human::Transport;
+pub use view::{Action, ClientMessage, ServerMessage};
+pub use view::{Game, Round};
 
+#[derive(Debug)]
 pub enum AgentKind {
     Bot(Bot),
-    Net(Box<Net>),
-    Process,
+    Human(Human),
 }
 
-// TODO: figure out the : syntax while defining trait
-// Also not sure the implications of Send
-pub trait Agent: Debug + Send {
-    fn call(&mut self, view: &Game) -> Result<Call>;
-    fn play(&mut self, view: &Game) -> Result<Card>;
+impl AgentKind {
+    pub(crate) fn call(&mut self, view: &Game) -> Call {
+        match self {
+            Self::Bot(bot) => bot.call(view),
+            Self::Human(human) => human.call(view),
+        }
+    }
+
+    pub(crate) fn play(&mut self, view: &Game) -> Card {
+        match self {
+            Self::Bot(bot) => bot.play(view),
+            Self::Human(human) => human.play(view),
+        }
+    }
+
     // TODO: potentially important to send the periodic update to the user
     // particularly if it is a multi-player setup where each player waiting some time for each
     // player to make her move.
-    // fn update(&self, view: &PlayerView);
+    // pub(crate) fn update(&self, view: &PlayerView);
 }

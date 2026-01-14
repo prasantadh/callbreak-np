@@ -30,6 +30,7 @@ pub enum Error {
     // Agent Error
     AgentSend,
     AgentRecv,
+    NotTheSolicitedResponse,
 }
 
 impl std::error::Error for Error {}
