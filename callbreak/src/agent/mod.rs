@@ -10,8 +10,15 @@ use crate::Result;
 use crate::game::{Call, Card};
 use crate::view::Game;
 
+pub enum AgentKind {
+    Bot(Bot),
+    Net(Box<Net>),
+    Process,
+}
+
 // TODO: figure out the : syntax while defining trait
-pub trait Agent: Debug {
+// Also not sure the implications of Send
+pub trait Agent: Debug + Send {
     fn call(&mut self, view: &Game) -> Result<Call>;
     fn play(&mut self, view: &Game) -> Result<Card>;
     // TODO: potentially important to send the periodic update to the user

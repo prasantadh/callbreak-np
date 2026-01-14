@@ -1,48 +1,62 @@
-use callbreak::{Host, agent::Bot};
-use std::sync::{Arc, Mutex};
-
 use axum::{
-    Router,
-    extract::State,
+    Json, Router,
+    extract::{
+        Path, State,
+        ws::{WebSocket, WebSocketUpgrade},
+    },
+    response::IntoResponse,
     routing::{get, post},
+};
+use callbreak::{
+    Host,
+    agent::{Bot, Net},
+};
+use serde_json::json;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
 };
 
 #[derive(Clone)]
 pub struct AppState {
-    host: Arc<Mutex<Host>>,
+    hosts: HashMap<usize, Arc<Mutex<Host>>>,
 }
 
-async fn new(State(state): State<AppState>) -> &'static str {
-    // let mut host = state.host.get_mut().unwrap();
-    /*
-        let host = state.game.get_mut().unwrap();
-        match host {
-            None => {
-                *host = Some(Host::new());
-            }
-            Some(v) => {
-                // check if the game is over
-                // if yes init
-                // if no reject
-                if v.is_over() {
-                } else {
-                    // return error with host is in progress
-                }
-            }
+// FIXME: at some point when games are over, I will need to dump the game somewhere
+// and release the id for a new game to started with the same id
+async fn new(State(mut state): State<AppState>) -> Json<serde_json::Value> {
+    loop {
+        let id = rand::random_range(0..=1000);
+        if state.hosts.contains_key(&id) {
+            continue;
         }
-    */
+        state.hosts.insert(id, Arc::new(Mutex::new(Host::new())));
+        return Json(json!({"room": id}));
+    }
+}
 
-    "Hello world!"
+async fn join(
+    State(mut state): State<AppState>,
+    Path(room): Path<usize>,
+    ws: WebSocketUpgrade,
+) -> impl IntoResponse {
+    ws.on_upgrade(move |mut socket| async move {
+        let host = state.hosts.get(&room).cloned();
+        let Some(host) = host else { return };
+        let host = host.lock().unwrap(); // FIXME: Do I need to do this in a
+        // loop or wait if there is another player being added?
+        host.add_agent("X".to_string(), Box::new(Net::new(socket)));
+    })
 }
 
 #[tokio::main]
 async fn main() {
     let state = AppState {
-        host: Arc::new(Mutex::new(Host::new())),
+        hosts: HashMap::new(),
     };
     let app = Router::new()
         .route("/new", post(new))
-        .route("/status", get(new))
+        .route("/join/{room}", get(join))
         .with_state(state);
 
     let mut host = Host::new();

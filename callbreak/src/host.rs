@@ -2,7 +2,7 @@ use crate::Result;
 use crate::{Game, agent::Agent};
 use tracing::debug;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Host {
     // TODO: I don't currently know the full implications of using Box<dyn> here. there seems to be
     // an altenative to use AgentKind enum with all options which seems to have performance

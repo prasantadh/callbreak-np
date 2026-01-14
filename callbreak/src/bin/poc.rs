@@ -1,7 +1,6 @@
-use std::net::TcpListener;
-
 use callbreak::Host;
 use callbreak::agent::{Bot, Net};
+use std::net::TcpListener;
 use tracing_subscriber::{EnvFilter, fmt};
 use tungstenite::accept;
 fn main() {

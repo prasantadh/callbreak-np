@@ -1,3 +1,7 @@
 [workspace]
+members = [
+    "api",
+    "callbreak",
+    "fe",
+]
 resolver = "2"
-members = [ "callbreak" ]
