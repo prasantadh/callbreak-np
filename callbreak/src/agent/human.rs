@@ -4,7 +4,7 @@ use crate::game::{Call, Card};
 use std::fmt::Debug;
 
 /// Mechanism for communication with a human
-pub trait Transport: Send + Sync + Debug {
+pub trait Transport: Send + Debug {
     fn send(&mut self, message: ServerMessage) -> Option<()>;
     fn receive(&mut self) -> ClientMessage;
 }

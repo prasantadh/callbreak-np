@@ -11,3 +11,4 @@ callbreak = {path="../callbreak/"}
 serde_json = "1.0.149"
 serde = { version = "1.0.228", features = ["derive", "rc"] }
 rand = { version = "0.9.2", features = ["thread_rng"] }
+futures = "0.3.31"
