@@ -1,3 +1,5 @@
+use tracing::debug;
+
 use super::view::Game;
 use super::view::{Action, ClientMessage, ServerMessage};
 use crate::game::{Call, Card};
@@ -36,6 +38,7 @@ impl Human {
         }
 
         let message = self.transport.receive();
+        debug!(?message);
         match message {
             ClientMessage::Call(v) => v,
             _ => {
@@ -55,6 +58,7 @@ impl Human {
             return bot.play(view);
         }
         let message = self.transport.receive();
+        debug!(?message);
         match message {
             // FIXME: this card should be in the list of valid moves or else we should use a bot to
             // provide a valid move

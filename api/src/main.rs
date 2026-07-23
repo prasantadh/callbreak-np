@@ -19,6 +19,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tokio::sync::mpsc;
+use tracing_subscriber::{EnvFilter, fmt};
 
 #[derive(Clone)]
 struct AppState {
@@ -127,6 +128,14 @@ async fn join(
 
 #[tokio::main]
 async fn main() {
+    fmt()
+        .with_env_filter(
+            // TODO: currently running on debug level tracing.
+            // offer different levels of tracing via env configuration
+            // EnvFilter::from_default_env().add_directive("callbreak=trace".parse().unwrap()),
+            EnvFilter::from_default_env(),
+        )
+        .init();
     let state = AppState {
         hosts: Arc::new(Mutex::new(HashMap::new())),
     };
