@@ -2,6 +2,7 @@
 members = [
     "api",
     "callbreak",
+    "cli-fe",
     "fe",
 ]
 resolver = "2"

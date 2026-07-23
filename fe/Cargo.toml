@@ -9,17 +9,23 @@ publish = false
 [dependencies]
 dioxus = { version = "0.7.1", features = ["router"] }
 callbreak = {path="../callbreak/"}
-tungstenite = "0.28.0"
-gloo-net = {version = "0.6.0", features = ["websocket"]}
+# One websocket client for every target: tokio-tungstenite natively, the
+# browser's WebSocket on wasm, behind a single `connect` + `Message`.
+tokio-tungstenite-wasm = "0.8.2"
 futures = "0.3.31"
-futures-util = "0.3.31"
-wasm-bindgen-futures = "0.4.56"
 serde = { version = "1.0.228", features = ["derive", "rc"] }
 serde_json = "1.0.149"
 
+# `getrandom` is not used directly; this turns on the backend that `rand`
+# (via callbreak) needs on wasm, where there is no OS entropy source.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.3.4", features = ["wasm_js"] }
 
+# Exactly one renderer feature at a time: `dx serve --platform web|macos|android`.
+# Natively, tokio-tungstenite runs on the multi-threaded tokio runtime that the
+# desktop/mobile renderer already starts, so no runtime setup is needed here.
 [features]
 default = ["web"]
 web = ["dioxus/web"]
+desktop = ["dioxus/desktop"]
+mobile = ["dioxus/mobile"]

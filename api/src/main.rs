@@ -1,9 +1,10 @@
 use axum::{
     Json, Router,
     extract::{
-        Path, State,
+        Path, Query, State,
         ws::{Message, WebSocket, WebSocketUpgrade},
     },
+    http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
 };
@@ -13,6 +14,7 @@ use callbreak::{
     game::Call,
 };
 use futures::{SinkExt, StreamExt};
+use serde::Deserialize;
 use serde_json::json;
 use std::{
     collections::HashMap,
@@ -75,50 +77,91 @@ impl Transport for AxumTransport {
     }
 }
 
-// FIXME: at some point when games are over, I will need to dump the game somewhere
-// and release the id for a new game to start with the same id
-async fn new(State(state): State<AppState>) -> Json<serde_json::Value> {
-    let mut hosts = state.hosts.lock().unwrap();
-    loop {
-        println!("attempting");
-        let id = rand::random_range(0..=1000);
-        if hosts.contains_key(&id) {
-            continue;
-        }
-        hosts.insert(id, Host::new());
-        return Json(json!({"room": id}));
-    }
+/// Query for `POST /new`, e.g. `?bots=2`. Seeds the game with 0–3 bots; the
+/// rest of the table fills with humans over `/join`.
+#[derive(Debug, Deserialize)]
+struct NewParams {
+    bots: usize,
 }
 
+// FIXME: at some point when games are over, I will need to dump the game somewhere
+// the dumping should likely be done by host.
+async fn new(State(state): State<AppState>, Query(params): Query<NewParams>) -> impl IntoResponse {
+    if params.bots > 3 {
+        let body = Json(json!({"error": "bots must be between 0 and 3"}));
+        return (StatusCode::BAD_REQUEST, body).into_response();
+    }
+
+    let mut hosts = state.hosts.lock().unwrap();
+    let id = loop {
+        let id = rand::random_range(0..=1000);
+        if !hosts.contains_key(&id) {
+            break id;
+        }
+    };
+
+    let mut host = Host::new();
+    for i in 0..params.bots {
+        let _ = host.add_agent(format!("bot{i}"), AgentKind::Bot(Bot));
+    }
+    hosts.insert(id, host);
+
+    Json(json!({"room": id})).into_response()
+}
+
+/// The client's first websocket frame, naming the joining human.
+#[derive(Debug, Deserialize)]
+struct JoinRequest {
+    name: String,
+}
+
+// FIXME: at some point I need a timer for when the lobby times out
+// and when each player times out.
 async fn join(
     State(state): State<AppState>,
     Path(room): Path<usize>,
     ws: WebSocketUpgrade,
 ) -> impl IntoResponse {
-    println!("a player has attempted join");
-    // loop or wait if there is another player being added?
-    ws.on_upgrade(move |socket| async move {
-        let mut hosts = state.hosts.lock().unwrap();
-        let Some(host) = hosts.get_mut(&room) else {
-            return;
-        };
-        host.add_agent("bot1".to_string(), AgentKind::Bot(Bot))
-            .unwrap();
-        host.add_agent("bot2".to_string(), AgentKind::Bot(Bot))
-            .unwrap();
-        host.add_agent("bot3".to_string(), AgentKind::Bot(Bot))
-            .unwrap();
-        let human = Human::new(Box::new(AxumTransport::new(socket)));
-        let _ = host.add_agent("ME".to_string(), AgentKind::Human(human));
-        // FIXME: ^ is an error, should handle it
-        let ready = host.is_ready();
-        drop(hosts);
-        if ready {
-            let mut host = {
-                let mut hosts = state.hosts.lock().unwrap();
-                hosts.remove(&room)
+    ws.on_upgrade(move |mut socket| async move {
+        // Reject the connection unless the first frame is a valid handshake.
+        let request: JoinRequest = match socket.recv().await {
+            Some(Ok(Message::Text(text))) => match serde_json::from_str(text.as_str()) {
+                Ok(request) => request,
+                Err(e) => {
+                    eprintln!("rejecting join to room {room}: bad handshake: {e}");
+                    return;
+                }
+            },
+            _ => {
+                eprintln!("rejecting join to room {room}: no handshake received");
+                return;
             }
-            .unwrap();
+        };
+
+        let human = AgentKind::Human(Human::new(Box::new(AxumTransport::new(socket))));
+
+        // Seat the player under the lock, then pull the host out to run once full.
+        let host_to_run = {
+            let mut hosts = state.hosts.lock().unwrap();
+            let Some(host) = hosts.get_mut(&room) else {
+                eprintln!(
+                    "rejecting {} from room {room}: room unavailable",
+                    request.name
+                );
+                return;
+            };
+            if let Err(e) = host.add_agent(request.name.clone(), human) {
+                eprintln!("rejecting {} from room {room}: {e}", request.name);
+                return;
+            }
+            if host.is_ready() {
+                hosts.remove(&room)
+            } else {
+                None
+            }
+        };
+
+        if let Some(mut host) = host_to_run {
             tokio::task::spawn_blocking(move || {
                 host.run();
             });
