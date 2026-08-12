@@ -1,0 +1,118 @@
+callbreak: changes that would help the clients
+==============================================
+
+Context: we are fine duplicating work on the client to keep the server light.
+That is a deliberate tradeoff, so items below split into two kinds:
+
+  (a) things that only move work off the client -- optional, take or leave;
+  (b) things where the duplication is a *correctness* risk, not just effort --
+      worth doing even under the "keep the server light" rule, because the
+      client and the engine can silently disagree.
+
+Nothing here is urgent. Recorded 2026-07-23.
+
+
+(b) CORRECTNESS -- duplication that can drift
+---------------------------------------------
+
+1. Expose `Trick::valid_play_from` (or put legal moves on the player view).
+   cli-fe/src/game_view.rs and fe/src/local/view.rs each hand-port ~40 lines
+   of trick-following rules, kept in sync by hand. That port is the only thing
+   between a player and the `assert!` in `Host::run` (host.rs:80): if the port
+   ever offers a card the engine rejects, the engine thread panics. This is the
+   one item where duplication is actively dangerous rather than merely wasteful.
+   fe has a regression test that plays a full match and would catch a drift,
+   but only for shuffles it happens to see.
+
+2. Do not panic on client input.
+   `Host::run` asserts on an illegal play and `expect`s in several other spots,
+   so a client bug takes down the engine thread rather than being rejected.
+   The FIXME at host.rs:78 already names the fix: substitute a bot move, or
+   return an error to the agent.
+
+3. Put the viewer's seat index in `ServerMessage`.
+   Clients currently locate themselves by string match:
+   `view.players.iter().position(|p| p == my_name)`. Two players sharing a name
+   silently collapses to seat 0. An explicit seat index removes the guesswork.
+
+
+(a) CONVENIENCE -- fine to leave on the client
+----------------------------------------------
+
+4. Accessors on `Trick` and `Call`.
+   `Trick` keeps `starter`/`cards` private and `Call` hides its count, so both
+   clients recover them by serialising to JSON and parsing it straight back
+   (`TrickWire::from_trick`, `call_value`). `Trick::cards()`, `Trick::starter()`
+   and `Call::value()` would delete both helpers. Cheap to add, no server work.
+
+5. Have the engine score, or don't -- but pick one.
+   `round_points` (bid made = +call plus 0.1 per overtrick; missed = -call) is
+   reimplemented identically in cli-fe and fe. The engine tracks calls and
+   tricks but no score. Fine to keep client-side under the tradeoff, as long as
+   every client agrees; the risk is two clients showing different totals for
+   the same game.
+
+6. Carry the trick winner / per-seat trick counts on `agent::Game`.
+   Clients recompute both from the raw tricks. Pure convenience.
+
+7. A shared view module.
+   cli-fe/src/game_view.rs and fe/src/local/view.rs are near-duplicates today.
+   Items 1 and 4 shrink both a lot; whatever survives is UI-agnostic and could
+   live in callbreak, or in a small shared crate, without adding server work.
+   (cli-fe is a binary crate, so fe cannot depend on it as things stand.)
+
+
+ARCHITECTURE -- bigger, only if it becomes a problem
+----------------------------------------------------
+
+8. A non-blocking `Host`.
+   `Host::run` is a fixed 5-round blocking loop with no way to observe, cancel
+   or step it, so every client needs a dedicated thread for the engine. A
+   step/poll API (or `run` yielding after each turn) would remove that thread
+   on native -- and is precisely what blocks local play in wasm, where there is
+   no thread to give it.
+
+9. `Human`'s wrong-variant fallback is silent.
+   Sending `ClientMessage::Call` on a play turn quietly substitutes a Bot move
+   with no signal to the client. Useful as a safety net, confusing as a
+   diagnostic.
+
+
+api: found while wiring fe's host/join
+--------------------------------------
+
+A. [FIXED] The api now closes the websocket when the game ends.
+   AxumTransport's writer sends a Close frame once the outbound channel drops
+   (i.e. `Host::run` returned), and a select aborts the reader so no task lingers
+   on a half-open socket. fe needed no change: it already treats the end of the
+   update stream as the end of the match, and its net test now waits for that
+   close rather than counting to a fixed number of prompts.
+   NB: a server instance started before this fix stays open forever — restart
+   any long-running api to pick it up.
+
+B. The api only talks to a seat when that seat has to act.
+   `Human::send` fires for the player being prompted, so a networked client
+   sees the table on its own turns and nothing in between: no other seat's play,
+   no trick being taken. Local play spectates every turn because fe owns all
+   four transports there. A broadcast to every seat after each play would make
+   net games watchable; `agent/mod.rs` already has a TODO for exactly this.
+
+C. `POST /new` picks room ids with `rand::random_range(0..=1000)`.
+   Fine now, but it caps the server at 1001 concurrent rooms and the retry loop
+   degrades as it fills.
+
+D. The api is now a lib + bin (`api::serve`, `api::serve_blocking`).
+   fe embeds it for local-network hosting, so the desktop app carries its own
+   server rather than depending on a running one. The standalone binary is
+   unchanged in behaviour. Any further api work should go in lib.rs, not main.rs.
+
+
+UNRELATED LOOSE END
+-------------------
+
+10. Android build is blocked on the JDK, not on code.
+    Rust compiles 400/400 for aarch64-linux-android, but Gradle fails in
+    `:app:compileDebugJavaWithJavac` -- JDK 26 is too new for the Android
+    Gradle Plugin's JdkImageTransform against android-34. Needs JAVA_HOME
+    pointed at a JDK 17 or 21 (Android Studio's bundled JBR would do).
+    Targets aarch64-linux-android and x86_64-linux-android are installed.

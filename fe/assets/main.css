@@ -180,6 +180,20 @@ button.choice.selected {
     color: #6f7891;
 }
 
+/* Filled in, rather than a placeholder. */
+.room-code-value.open {
+    color: #ffd45e;
+    font-weight: 700;
+}
+
+/* An address is long and needs reading exactly, so it gets a fixed pitch. */
+.room-code-address {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 1.15rem;
+    color: #e8ecf6;
+    word-break: break-all;
+}
+
 /* ---------------------------------------------------------------- Lobby -- */
 .lobby {
     max-width: 30rem;
@@ -221,6 +235,14 @@ button.primary:hover {
     background: #4a8259;
 }
 
+/* Nothing starts without a name, so the button says so before it is pressed. */
+button.primary:disabled,
+button.primary:disabled:hover {
+    background: #2b3440;
+    color: #6b768c;
+    cursor: not-allowed;
+}
+
 /* ----------------------------------------------------------------- Game -- */
 /* One column filling the window: a slim heading, the felt taking every spare
    pixel, then the tricks strip and the status line. */
@@ -231,15 +253,18 @@ button.primary:hover {
     min-height: calc(100vh - 2.5rem);
 }
 
+/* The heading may be empty — a solo game has no room to show — so the button
+   is pinned to the right rather than pushed there by whatever precedes it. */
 .game-head {
     display: flex;
     align-items: baseline;
-    justify-content: space-between;
+    justify-content: flex-end;
     gap: 1rem;
 }
 
 .game-head h2 {
     margin: 0;
+    margin-right: auto;
     font-size: 1.1rem;
     font-weight: 500;
     color: #9aa4bf;

@@ -2,10 +2,7 @@ use dioxus::prelude::*;
 use futures::StreamExt;
 use tokio_tungstenite_wasm::{connect, Message, WebSocketStream};
 
-/// Hosting a game in-process needs a thread for the blocking engine loop, so
-/// local play is native only. See `local`'s module note.
-#[cfg(not(target_arch = "wasm32"))]
-mod local;
+mod game;
 mod menu;
 
 #[derive(Debug, Clone, Routable, PartialEq)]

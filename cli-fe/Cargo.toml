@@ -1,0 +1,10 @@
+[package]
+name = "cli-fe"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+callbreak = { path = "../callbreak/" }
+clap = { version = "4.5.51", features = ["derive"] }
+ratatui = "0.29.0"

@@ -23,7 +23,7 @@ impl Trick {
 
     pub(crate) fn play(&mut self, card: Card) -> Result<()> {
         if self.is_over() {
-            Err(Error::NotAcceptingPlay)
+            Err(Error::NotAcceptingPlays)
         } else {
             let next = self.turn().expect("must have next available when not over");
             // TODO: may be a trick should not accept a duplicate card either?
@@ -34,7 +34,7 @@ impl Trick {
 
     pub(crate) fn turn(&self) -> Result<Turn> {
         if self.is_over() {
-            Err(Error::NotAcceptingPlay)
+            Err(Error::NotAcceptingPlays)
         } else {
             let mut turn = self.starter;
             while self.cards[turn].is_some() {
@@ -45,15 +45,19 @@ impl Trick {
         }
     }
 
-    pub(crate) fn is_over(&self) -> bool {
+    pub fn is_over(&self) -> bool {
         self.cards.iter().all(|c| c.is_some())
     }
 
-    pub(crate) fn starter(&self) -> (Turn, Option<Card>) {
+    pub fn starter(&self) -> (Turn, Option<Card>) {
         (self.starter, self.cards[self.starter])
     }
 
-    pub(crate) fn winner(&self) -> Option<(Turn, Card)> {
+    pub fn cards(&self) -> &[Option<Card>; 4] {
+        &self.cards
+    }
+
+    pub fn winner(&self) -> Option<(Turn, Card)> {
         // if there is a spade card, return the max spade card by rank
         // else return the max ranked card of the starter suit
         match self.starter() {
@@ -82,7 +86,7 @@ impl Trick {
         }
     }
 
-    pub(crate) fn valid_play_from(&self, cards: &[Card]) -> Vec<Card> {
+    pub fn valid_play_from(&self, cards: &[Card]) -> Vec<Card> {
         if self.is_over() {
             return vec![];
         }

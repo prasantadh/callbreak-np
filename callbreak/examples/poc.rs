@@ -1,6 +1,6 @@
 use callbreak::Host;
-use callbreak::agent::{AgentKind, Bot, ClientMessage, Human, ServerMessage, Transport};
-use callbreak::game::Call;
+use callbreak::agent::strategy::Random;
+use callbreak::agent::{ClientMessage, Remote, ServerMessage, Transport};
 use std::net::{TcpListener, TcpStream};
 use tracing_subscriber::{EnvFilter, fmt};
 use tungstenite::{Message, WebSocket, accept};
@@ -9,6 +9,7 @@ use tungstenite::{Message, WebSocket, accept};
 struct PocTransport {
     transport: WebSocket<TcpStream>,
 }
+
 impl Transport for PocTransport {
     fn send(&mut self, message: ServerMessage) -> Option<()> {
         let message = serde_json::to_string(&message).expect("must serialize without issue");
@@ -17,14 +18,11 @@ impl Transport for PocTransport {
             .ok()
     }
 
-    fn receive(&mut self) -> ClientMessage {
+    fn receive(&mut self) -> Option<ClientMessage> {
         // deserialize the response into a ClientMessage then return to the server
         match self.transport.read() {
-            Ok(Message::Text(text)) => match serde_json::from_str(text.as_str()) {
-                Ok(message) => message,
-                _ => ClientMessage::Call(Call::new(1).unwrap()),
-            },
-            _ => ClientMessage::Call(Call::new(1).unwrap()),
+            Ok(Message::Text(text)) => serde_json::from_str(text.as_str()).ok(),
+            _ => None,
         }
     }
 }
@@ -37,10 +35,9 @@ fn main() {
             EnvFilter::from_default_env().add_directive("callbreak=trace".parse().unwrap()),
         )
         .init();
-    let mut host = Host::new();
+    let mut host = Host::default();
     for id in 0..3 {
-        let agent = callbreak::agent::AgentKind::Bot(Bot);
-        host.add_agent(id.to_string(), agent)
+        host.add_agent(id.to_string(), Random)
             .expect("must be able to add 4 players");
     }
 
@@ -53,10 +50,8 @@ fn main() {
         .expect("must handover to the websocket correctly");
     let socket = accept(stream).expect("FIXME: uhh not sure what the error could be");
     let transport = PocTransport { transport: socket };
-    let human = Human::new(Box::new(transport));
-    let agent = AgentKind::Human(human);
-    host.add_agent("3".to_string(), agent)
+    host.add_agent("3".to_string(), Remote::new(transport))
         .expect("must be able to add the fourth player");
 
-    host.run();
+    host.run().expect("game must run to completion");
 }

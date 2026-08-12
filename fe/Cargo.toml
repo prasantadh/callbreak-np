@@ -13,6 +13,9 @@ callbreak = {path="../callbreak/"}
 # browser's WebSocket on wasm, behind a single `connect` + `Message`.
 tokio-tungstenite-wasm = "0.8.2"
 futures = "0.3.31"
+# Only used to open a room (`POST /new`); the game itself runs on the socket.
+# No TLS features: the api is plain http for now.
+reqwest = { version = "0.12", default-features = false, features = ["json"] }
 serde = { version = "1.0.228", features = ["derive", "rc"] }
 serde_json = "1.0.149"
 
@@ -20,6 +23,16 @@ serde_json = "1.0.149"
 # (via callbreak) needs on wasm, where there is no OS entropy source.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.3.4", features = ["wasm_js"] }
+
+# Hosting on a local network runs the api in this process, so the app is
+# self-contained — no separately-running server. Native only: the engine's
+# blocking loop needs threads the browser has not got.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+api = { path = "../api" }
+
+# For the api round-trip test, which needs a reactor of its own.
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
 
 # Exactly one renderer feature at a time: `dx serve --platform web|macos|android`.
 # Natively, tokio-tungstenite runs on the multi-threaded tokio runtime that the

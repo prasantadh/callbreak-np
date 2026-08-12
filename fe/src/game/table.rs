@@ -12,13 +12,40 @@
 //! same components from the api's websocket.
 
 use super::card_art::{CardBack, CardFace};
-use super::session;
+use super::net;
 use super::view::{TableState, Update};
+use super::Session;
 use callbreak::agent::{Action, ClientMessage};
 use callbreak::game::{Call, Card};
 use dioxus::prelude::*;
+use futures::channel::mpsc::UnboundedSender;
 use futures::StreamExt;
-use std::sync::mpsc::Sender;
+
+/// What is driving the game. The table renders the same either way.
+#[derive(Clone, PartialEq)]
+pub enum Source {
+    /// The engine hosted in this process, against bots.
+    #[cfg(not(target_arch = "wasm32"))]
+    Local,
+    /// A seat in an api room, on whichever server opened it.
+    Net { server: net::Server, room: usize },
+}
+
+impl Source {
+    async fn open(&self, name: String) -> Result<Session, String> {
+        match self {
+            #[cfg(not(target_arch = "wasm32"))]
+            Source::Local => super::local::start(name).map_err(|error| error.to_string()),
+            Source::Net { server, room } => {
+                let (session, pump) = net::join(server, name, *room).await?;
+                // The socket is worked by a Dioxus task, so it stops when the
+                // table unmounts.
+                spawn(pump);
+                Ok(session)
+            }
+        }
+    }
+}
 
 /// Seat positions on screen, indexed by offset from the viewer.
 const POSITIONS: [&str; 4] = ["bottom", "left", "top", "right"];
@@ -26,7 +53,6 @@ const POSITIONS: [&str; 4] = ["bottom", "left", "top", "right"];
 /// Everything the table draws, folded together from the engine's updates.
 #[derive(Clone)]
 struct GameState {
-    me: String,
     table: Option<TableState>,
     /// The viewer's hand and legal moves, from the last prompt.
     hand: Vec<Card>,
@@ -41,9 +67,8 @@ struct GameState {
 }
 
 impl GameState {
-    fn new(me: String) -> Self {
+    fn new() -> Self {
         Self {
-            me,
             table: None,
             hand: vec![],
             playable: vec![],
@@ -84,6 +109,9 @@ impl GameState {
                 self.status = match action {
                     Action::Call => String::new(),
                     Action::Break => "Your turn.".to_string(),
+                    // A prompt never carries an update; the arm exists so a new
+                    // `Action` cannot slip through unhandled.
+                    Action::Update => String::new(),
                 };
             }
         }
@@ -98,10 +126,7 @@ impl GameState {
         self.status = match &self.table {
             Some(table) => {
                 let totals = table.totals();
-                let best = totals
-                    .iter()
-                    .cloned()
-                    .fold(f32::MIN, f32::max);
+                let best = totals.iter().cloned().fold(f32::MIN, f32::max);
                 let winners: Vec<&str> = table
                     .seats
                     .iter()
@@ -122,68 +147,23 @@ impl GameState {
     }
 }
 
-/// Local play: ask who is sitting down, then hand over to the table.
+/// A seat at a table, wherever the game is coming from.
 #[component]
-pub fn LocalPlay() -> Element {
-    let mut player = use_signal(|| None::<String>);
-
-    match player() {
-        None => rsx! {
-            Lobby { on_start: move |name| player.set(Some(name)) }
-        },
-        // Keyed on the name so "play again" with a different name remounts the
-        // component, which is what starts a fresh engine thread.
-        Some(name) => rsx! {
-            LocalGame { key: "{name}", name }
-        },
-    }
-}
-
-#[component]
-fn Lobby(on_start: EventHandler<String>) -> Element {
-    let mut name = use_signal(|| "you".to_string());
-    let start = move || {
-        let entered = name().trim().to_string();
-        on_start.call(if entered.is_empty() {
-            "you".to_string()
-        } else {
-            entered
-        });
-    };
-
-    rsx! {
-        div { class: "lobby",
-            h1 { "Callbreak" }
-            p { class: "lobby-blurb", "Five rounds against three bots, on this machine." }
-            input {
-                class: "lobby-name",
-                value: "{name}",
-                autofocus: true,
-                oninput: move |event| name.set(event.value()),
-                onkeydown: move |event| {
-                    if event.key() == Key::Enter {
-                        start();
-                    }
-                },
-            }
-            button { class: "primary", onclick: move |_| start(), "Take a seat" }
-        }
-    }
-}
-
-#[component]
-fn LocalGame(name: String) -> Element {
-    let mut state = use_signal(|| GameState::new(name.clone()));
+pub fn GameTable(name: String, source: Source) -> Element {
+    let mut state = use_signal(GameState::new);
     // Held for the click handlers; `None` until the engine thread is up.
-    let moves = use_signal(|| None::<Sender<ClientMessage>>);
+    let moves = use_signal(|| None::<UnboundedSender<ClientMessage>>);
 
     // Starts the engine once on mount and then folds its updates into `state`
     // until the channel closes, which is how we learn the match ended.
+    // Cloned for the heading below, since the future takes the prop itself.
+    let opened = source.clone();
     use_future(move || {
         let name = name.clone();
+        let source = source.clone();
         let mut moves = moves;
         async move {
-            match session::start(name) {
+            match source.open(name).await {
                 Ok(session) => {
                     moves.set(Some(session.moves));
                     let mut updates = session.updates;
@@ -192,7 +172,7 @@ fn LocalGame(name: String) -> Element {
                     }
                     state.write().finish();
                 }
-                Err(error) => state.write().fail(&error.to_string()),
+                Err(error) => state.write().fail(&error),
             }
         }
     });
@@ -219,8 +199,14 @@ fn LocalGame(name: String) -> Element {
 
     let pending_call = snapshot.call_value;
 
-    // The round number lives on the felt, so the heading says only who you are.
-    let title = format!("You are {}", snapshot.me);
+    // Your own name is already on your seat and the round is on the felt, so
+    // the heading carries only what is nowhere else: the room, which the host
+    // still needs to hand out after sitting down.
+    let title = match &opened {
+        Source::Net { room, .. } => format!("Room {room}"),
+        #[cfg(not(target_arch = "wasm32"))]
+        Source::Local => String::new(),
+    };
 
     let seats = seat_views(&snapshot);
     let played: Vec<PlayView> = seats
@@ -274,7 +260,9 @@ fn LocalGame(name: String) -> Element {
     rsx! {
         div { class: "game",
             header { class: "game-head",
-                h2 { "{title}" }
+                if !title.is_empty() {
+                    h2 { "{title}" }
+                }
                 button {
                     class: "ghost",
                     onclick: move |_| {
@@ -599,9 +587,9 @@ fn seat_views(state: &GameState) -> Vec<SeatView> {
                 name_class: if offset == 0 { "me" } else { "" },
                 // With the scoreboard hidden, each seat carries its own standing
                 // in this round: tricks taken against what it called.
-                progress: match round.and_then(|round| {
-                    round.calls[index].map(|call| (round.won[index], call))
-                }) {
+                progress: match round
+                    .and_then(|round| round.calls[index].map(|call| (round.won[index], call)))
+                {
                     Some((won, call)) => format!("{won}/{call}"),
                     None => String::new(),
                 },
@@ -617,7 +605,11 @@ fn seat_views(state: &GameState) -> Vec<SeatView> {
 
 /// Answer a call prompt. Illegal values are dropped rather than sent, since the
 /// engine asserts on anything it did not offer.
-fn submit_call(mut state: Signal<GameState>, moves: Signal<Option<Sender<ClientMessage>>>, value: u8) {
+fn submit_call(
+    mut state: Signal<GameState>,
+    moves: Signal<Option<UnboundedSender<ClientMessage>>>,
+    value: u8,
+) {
     if !state.read().awaiting {
         return;
     }
@@ -634,7 +626,11 @@ fn submit_call(mut state: Signal<GameState>, moves: Signal<Option<Sender<ClientM
 
 /// Play a card. Only cards the engine listed as legal are sent; the click is
 /// ignored otherwise, which is what keeps `Host::run`'s assertion satisfied.
-fn submit_play(mut state: Signal<GameState>, moves: Signal<Option<Sender<ClientMessage>>>, card: Card) {
+fn submit_play(
+    mut state: Signal<GameState>,
+    moves: Signal<Option<UnboundedSender<ClientMessage>>>,
+    card: Card,
+) {
     {
         let state = state.read();
         if !state.awaiting
@@ -666,9 +662,9 @@ fn submit_play(mut state: Signal<GameState>, moves: Signal<Option<Sender<ClientM
     }
 }
 
-fn send(moves: &Signal<Option<Sender<ClientMessage>>>, message: ClientMessage) -> bool {
+fn send(moves: &Signal<Option<UnboundedSender<ClientMessage>>>, message: ClientMessage) -> bool {
     match moves.read().as_ref() {
-        Some(sender) => sender.send(message).is_ok(),
+        Some(sender) => sender.unbounded_send(message).is_ok(),
         None => false,
     }
 }

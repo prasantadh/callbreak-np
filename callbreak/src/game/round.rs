@@ -4,38 +4,28 @@ use crate::{Error, Result};
 use serde::Serialize;
 use std::array;
 
+const TRICKS: usize = 13;
+
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct Round {
     starter: Turn,
     hands: [Hand; 4],
-    calls: [Option<Call>; 4],
-    tricks: [Option<Trick>; 13],
+    phase: Phase,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-enum State {
-    Calling,
-    TrickInProgress,
-    Over,
+/// The fourth call moves a round to `Playing`, where `calls` has no `Option`
+/// left: "has everybody called?" stops being a question anything can ask, and
+/// the first trick exists from the moment there is one to play into.
+#[derive(Debug, Clone, Serialize)]
+enum Phase {
+    Calling([Option<Call>; 4]),
+    Playing {
+        calls: [Call; 4],
+        tricks: [Option<Trick>; TRICKS],
+    },
 }
 
 impl Round {
-    fn state(&self) -> State {
-        if self.calls.iter().any(|call| call.is_none()) {
-            State::Calling
-        } else if self
-            .tricks
-            .last()
-            .expect("must have the last slot available by definition")
-            .as_ref()
-            .is_some_and(|t| t.is_over())
-        {
-            State::Over
-        } else {
-            State::TrickInProgress
-        }
-    }
-
     pub(crate) fn new(starter: Turn) -> Self {
         let mut hands = vec![];
         'dealing: loop {
@@ -53,112 +43,112 @@ impl Round {
         Round {
             starter,
             hands: hands.try_into().expect("must be exactly 4 hands"),
-            calls: [None; 4],
-            tricks: array::from_fn(|_| None),
+            phase: Phase::Calling([None; 4]),
         }
     }
 
     pub(crate) fn call(&mut self, call: Call, turn: Turn) -> Result<()> {
-        match self.state() {
-            State::Calling => {
-                if self.turn()? != turn {
-                    return Err(Error::NotYourTurn);
-                } else {
-                    self.calls[turn] = Some(call);
-                }
-                // if all calls are made, start a trick
-                if turn.next() == self.starter {
-                    self.tricks[0] = Some(Trick::new(self.starter))
-                }
-                Ok(())
+        let Phase::Calling(calls) = &self.phase else {
+            return Err(Error::NotAcceptingCalls);
+        };
+        let mut calls = *calls;
+        if self.turn()? != turn {
+            return Err(Error::NotYourTurn);
+        }
+        calls[turn] = Some(call);
+
+        self.phase = if turn.next() == self.starter {
+            let mut tricks: [Option<Trick>; TRICKS] = array::from_fn(|_| None);
+            tricks[0] = Some(Trick::new(self.starter));
+            Phase::Playing {
+                calls: calls.map(|call| call.expect("every seat has now called")),
+                tricks,
             }
-            _ => Err(Error::NotAcceptingCalls),
+        } else {
+            Phase::Calling(calls)
+        };
+        Ok(())
+    }
+
+    /// `None` both before the calls are in and after the last trick — two
+    /// states a caller cannot act in either way, so both read as one here.
+    fn active_trick(&self) -> Option<&Trick> {
+        let Phase::Playing { tricks, .. } = &self.phase else {
+            return None;
+        };
+        tricks.iter().flatten().find(|trick| !trick.is_over())
+    }
+
+    fn active_trick_mut(&mut self) -> Option<&mut Trick> {
+        let Phase::Playing { tricks, .. } = &mut self.phase else {
+            return None;
+        };
+        tricks.iter_mut().flatten().find(|trick| !trick.is_over())
+    }
+
+    /// The trick just taken decides who leads the next one. No free slot means
+    /// the round is done.
+    fn deal_next_trick(&mut self, winner: Turn) {
+        let Phase::Playing { tricks, .. } = &mut self.phase else {
+            return;
+        };
+        if let Some(slot) = tricks.iter().position(Option::is_none) {
+            tricks[slot] = Some(Trick::new(winner));
         }
     }
 
     pub(crate) fn play(&mut self, card: Card, turn: Turn) -> Result<()> {
-        match self.state() {
-            State::TrickInProgress => {
-                let slot = self
-                    .tricks
-                    .iter()
-                    .position(|t| t.as_ref().is_some_and(|t| !t.is_over()))
-                    .expect("must have an active trick in this state");
-
-                let winner = {
-                    if turn != self.turn()? {
-                        return Err(Error::NotYourTurn);
-                    }
-                    if !self.get_valid_moves(turn)?.contains(&card) {
-                        return Err(Error::InvalidPlay);
-                    }
-                    // TODO: if hand.play() passes trick.play() must not fail.
-                    // The code doesn't read like a single transaction at the moment.
-                    // There might be a way to write it better?
-                    let trick = self.tricks[slot]
-                        .as_mut()
-                        .expect("current trick must be available");
-                    self.hands[turn].play(card)?;
-                    trick.play(card)?;
-                    trick
-                        .winner()
-                        .expect("a started trick must have a winner")
-                        .0
-                };
-
-                if slot != 12
-                    && self.tricks[slot]
-                        .as_ref()
-                        .is_some_and(|trick| trick.is_over())
-                {
-                    self.tricks[slot + 1] = Some(Trick::new(winner))
-                }
-                Ok(())
-            }
-            _ => Err(Error::NotAcceptingPlay),
+        if turn != self.turn()? {
+            return Err(Error::NotYourTurn);
         }
+        if !self.get_valid_moves(turn)?.contains(&card) {
+            return Err(Error::CardNotPlayable);
+        }
+
+        // Everything below is the move itself, and none of it can fail: the
+        // check above read this hand and found this card, and it only answers
+        // at all while a trick is open. So there is no half-applied move to
+        // unwind — a violation here means the round is already corrupt.
+        self.hands[turn]
+            .play(card)
+            .expect("the card was just found in this hand");
+        let trick = self
+            .active_trick_mut()
+            .expect("a trick was open a moment ago");
+        trick.play(card).expect("an open trick accepts a card");
+        let winner = trick
+            .winner()
+            .expect("a started trick must have a winner")
+            .0;
+        let finished = trick.is_over();
+
+        if finished {
+            self.deal_next_trick(winner);
+        }
+        Ok(())
     }
 
     pub(crate) fn get_valid_moves(&self, turn: Turn) -> Result<Vec<Card>> {
-        match self.state() {
-            State::TrickInProgress => {
-                if turn != self.turn()? {
-                    return Err(Error::NotYourTurn);
-                }
-                let slot = self
-                    .tricks
-                    .iter()
-                    .position(|t| t.as_ref().is_some_and(|t| !t.is_over()))
-                    .expect("must have an active trick in this state");
-                let cards: Vec<Card> = self.hands[turn].filter(|_| true).cloned().collect();
-                Ok(self.tricks[slot].as_ref().unwrap().valid_play_from(&cards))
-            }
-            _ => Err(Error::NotAcceptingPlay),
+        let trick = self.active_trick().ok_or(Error::NotAcceptingPlays)?;
+        if turn != self.turn()? {
+            return Err(Error::NotYourTurn);
         }
+        let cards: Vec<Card> = self.hands[turn].filter(|_| true).cloned().collect();
+        Ok(trick.valid_play_from(&cards))
     }
 
     pub(crate) fn turn(&self) -> Result<Turn> {
-        match self.state() {
-            State::Calling => {
-                let mut next = self.starter;
-                while self.calls[next].is_some() {
-                    // loop must terminate because it is calling
-                    next = next.next();
-                }
-                Ok(next)
+        if let Phase::Calling(calls) = &self.phase {
+            let mut next = self.starter;
+            while calls[next].is_some() {
+                // loop must terminate because it is calling
+                next = next.next();
             }
-            State::TrickInProgress => {
-                let slot = self
-                    .tricks
-                    .iter()
-                    .position(|t| t.as_ref().is_some_and(|t| !t.is_over()))
-                    .expect("must have an active trick in this state");
-                self.tricks[slot]
-                    .as_ref()
-                    .expect("active trick must be Some(trick)")
-                    .turn()
-            }
-            State::Over => Err(Error::RoundIsOver),
+            return Ok(next);
+        }
+        match self.active_trick() {
+            Some(trick) => trick.turn(),
+            None => Err(Error::RoundIsOver),
         }
     }
 
@@ -166,16 +156,24 @@ impl Round {
         &self.hands[turn]
     }
 
-    pub(crate) fn get_calls(&self) -> &[Option<Call>; 4] {
-        &self.calls
+    /// Owned rather than borrowed: once a round is playing its calls are no
+    /// longer `Option`s, so the shape a view wants has to be rebuilt.
+    pub(crate) fn get_calls(&self) -> [Option<Call>; 4] {
+        match &self.phase {
+            Phase::Calling(calls) => *calls,
+            Phase::Playing { calls, .. } => calls.map(Some),
+        }
     }
 
     pub(crate) fn get_tricks(&self) -> &[Option<Trick>] {
-        &self.tricks
+        match &self.phase {
+            Phase::Calling(_) => &[],
+            Phase::Playing { tricks, .. } => tricks,
+        }
     }
 
     pub(crate) fn is_over(&self) -> bool {
-        self.state() == State::Over
+        matches!(self.phase, Phase::Playing { .. }) && self.active_trick().is_none()
     }
 }
 

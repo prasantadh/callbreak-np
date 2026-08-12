@@ -2,38 +2,31 @@
 //! is a choice and none of them is worth a URL yet.
 //!
 //! ```text
-//! Host ────┬─ Internet ──────┐
-//!          └─ Local network ─┴─ pick bots ─ room number
+//! Host ────┬─ Internet ────── name + bots ─ room number ─ take your seat
+//!          └─ Local network ─ name + bots ─ room number + this machine's
+//!                                           address ─ take your seat
 //!
-//! Join ────┬─ Internet ──────┬─ enter a room number
-//!          │                 └─ join any room
-//!          └─ Local network ─── enter a room number
+//! Join ────┬─ Internet ──────┬─ name + room number ─ take your seat
+//!          │                 └─ join any room (on hold)
+//!          └─ Local network ─ name + host address + room number
 //!
-//! Just me ─── a local game against bots
+//! Just me ─── name ─ a game against bots, hosted in this process
 //! ```
 //!
-//! Only "just me" is implemented. Everything networked renders its real
-//! controls and then stops at an explicit "on hold" panel: the flow is worth
-//! having laid out, but a room number that no server has reserved would be a
-//! lie, so none is invented.
+//! The difference between the two networks is only which api is on the other
+//! end. Internet play uses the address compiled into the build; local-network
+//! play uses the api on the host's own machine, which binds `0.0.0.0` and so is
+//! already reachable from the LAN — the host reads their address off the room
+//! screen and everyone else types it in.
 
+use crate::game::{net, GameTable, Server, Source};
 use dioxus::prelude::*;
 
-/// How a game is carried. The two differ in what joining offers: only the
-/// internet can match you with strangers.
+/// Which api is on the other end.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Network {
     Internet,
     Lan,
-}
-
-impl Network {
-    fn label(self) -> &'static str {
-        match self {
-            Network::Internet => "internet",
-            Network::Lan => "local network",
-        }
-    }
 }
 
 #[derive(Clone, PartialEq)]
@@ -43,18 +36,25 @@ enum Screen {
     Host,
     /// Choosing which network to join over.
     Join,
-    /// A game against bots, in this process.
+    /// Naming yourself before a game against bots.
     JustMe,
-    /// Seats and bots, before the room exists.
+    /// Your name and how many seats the bots take.
     HostSetup(Network),
+    /// The room the api opened, waiting for you to sit down.
     Room {
         network: Network,
         bots: usize,
+        name: String,
     },
-    /// How to find a room, once the network is chosen.
-    JoinWhere(Network),
-    /// Typing in a room number.
+    /// How to find a room over the internet.
+    JoinWhere,
+    /// Your name, the room number, and — on a LAN — the host's address.
     Code(Network),
+    /// At the table.
+    Play {
+        name: String,
+        source: Source,
+    },
     /// A leaf we cannot serve yet. Carries where "back" should return to.
     OnHold {
         title: String,
@@ -71,8 +71,12 @@ impl Screen {
             Screen::Host | Screen::Join | Screen::JustMe => Some(Screen::Root),
             Screen::HostSetup(_) => Some(Screen::Host),
             Screen::Room { network, .. } => Some(Screen::HostSetup(*network)),
-            Screen::JoinWhere(_) => Some(Screen::Join),
-            Screen::Code(network) => Some(Screen::JoinWhere(*network)),
+            Screen::JoinWhere => Some(Screen::Join),
+            // Only the internet path offers a choice worth going back to.
+            Screen::Code(Network::Internet) => Some(Screen::JoinWhere),
+            Screen::Code(Network::Lan) => Some(Screen::Join),
+            // Leaving a table is leaving the game, so it goes all the way back.
+            Screen::Play { .. } => Some(Screen::Root),
             Screen::OnHold { back, .. } => Some((**back).clone()),
         }
     }
@@ -114,44 +118,55 @@ pub fn Menu() -> Element {
         Screen::Join => rsx! {
             h1 { "Join" }
             div { class: "options",
-                button { class: "option", onclick: move |_| screen.set(Screen::JoinWhere(Network::Internet)), "Over the internet" }
-                button { class: "option", onclick: move |_| screen.set(Screen::JoinWhere(Network::Lan)), "On the local network" }
+                button { class: "option", onclick: move |_| screen.set(Screen::JoinWhere), "Over the internet" }
+                button { class: "option", onclick: move |_| screen.set(Screen::Code(Network::Lan)), "On the local network" }
             }
         },
 
         // The engine runs in this process, which needs a thread wasm has not got.
         #[cfg(not(target_arch = "wasm32"))]
         Screen::JustMe => rsx! {
-            crate::local::LocalPlay {}
+            h1 { "Just me" }
+            p { class: "lobby-blurb", "Five rounds against three bots, on this machine." }
+            NameEntry {
+                action: "Start",
+                on_submit: move |name| screen.set(Screen::Play { name, source: Source::Local }),
+            }
         },
         #[cfg(target_arch = "wasm32")]
         Screen::JustMe => rsx! {
             h1 { "Just me" }
             p { class: "muted",
-                "A solo game hosts the engine in this process, which needs a thread the browser cannot give it. Use the desktop build."
+                "A solo game hosts the engine in this process, which needs a thread the browser cannot give it. Use the desktop build, or host a room over the internet."
             }
         },
 
         Screen::HostSetup(network) => rsx! {
-            h1 { "Host · {network.label()}" }
+            h1 {
+                if network == Network::Internet { "Host · internet" } else { "Host · local network" }
+            }
             HostSettings {
-                on_create: move |bots| screen.set(Screen::Room { network, bots }),
+                on_create: move |(name, bots)| screen.set(Screen::Room { network, bots, name }),
             }
         },
-
-        Screen::Room { network, bots } => rsx! {
+        Screen::Room {
+            network,
+            bots,
+            name,
+        } => rsx! {
             h1 { "Your room" }
-            p { "Hosting over the {network.label()} with {bots} bot(s). You are seated; the rest of the table is open." }
-            div { class: "room-code",
-                span { class: "room-code-label", "Room number" }
-                span { class: "room-code-value", "— — — —" }
-            }
-            p { class: "muted",
-                "Room numbers are issued by the api, which is not wired up yet, so there is nothing to share here."
+            HostRoom {
+                lan: network == Network::Lan,
+                bots,
+                on_seat: move |(name, server, room)| screen.set(Screen::Play {
+                    name,
+                    source: Source::Net { server, room },
+                }),
+                name,
             }
         },
 
-        Screen::JoinWhere(Network::Internet) => rsx! {
+        Screen::JoinWhere => rsx! {
             h1 { "Join · internet" }
             div { class: "options",
                 button { class: "option", onclick: move |_| screen.set(Screen::Code(Network::Internet)), "Enter a room number" }
@@ -159,31 +174,30 @@ pub fn Menu() -> Element {
                     class: "option",
                     onclick: move |_| screen.set(on_hold(
                         "Join any room",
-                        "Matchmaking needs the api. Nothing to match against yet.",
-                        Screen::JoinWhere(Network::Internet),
+                        "Matchmaking needs the api to keep a list of open rooms, which it does not do yet. A room number works now.",
+                        Screen::JoinWhere,
                     )),
                     "Join any room"
                 }
             }
         },
-
-        Screen::JoinWhere(Network::Lan) => rsx! {
-            h1 { "Join · local network" }
-            p { class: "muted", "On a local network there is nobody to match you, so you need the host's room number." }
-            div { class: "options",
-                button { class: "option", onclick: move |_| screen.set(Screen::Code(Network::Lan)), "Enter a room number" }
+        Screen::Code(network) => rsx! {
+            h1 {
+                if network == Network::Internet { "Join · internet" } else { "Join · local network" }
+            }
+            JoinForm {
+                // Over the internet the server is known; on a LAN the host has
+                // to tell you where they are.
+                ask_for_address: network == Network::Lan,
+                on_join: move |(name, server, room)| screen.set(Screen::Play {
+                    name,
+                    source: Source::Net { server, room },
+                }),
             }
         },
 
-        Screen::Code(network) => rsx! {
-            h1 { "Enter a room number" }
-            CodeEntry {
-                on_join: move |code: String| screen.set(on_hold(
-                    &format!("Joining room {code}"),
-                    "Rooms live on the api, which is not wired up yet.",
-                    Screen::Code(network),
-                )),
-            }
+        Screen::Play { name, source } => rsx! {
+            GameTable { name, source }
         },
 
         Screen::OnHold { title, detail, .. } => rsx! {
@@ -202,7 +216,7 @@ pub fn Menu() -> Element {
                             screen.set(previous);
                         }
                     },
-                    "\u{2039} Back"
+                    "‹ Back"
                 }
             }
             {body}
@@ -210,9 +224,47 @@ pub fn Menu() -> Element {
     }
 }
 
-/// Host settings: how many seats the bots take before anyone joins.
+/// Who you are, for any game that needs to know. There is no default: a name
+/// is how a seat is identified, so nothing starts until one is typed.
 #[component]
-fn HostSettings(on_create: EventHandler<usize>) -> Element {
+fn NameEntry(action: &'static str, on_submit: EventHandler<String>) -> Element {
+    let mut name = use_signal(String::new);
+    let entered = name().trim().to_string();
+    let ready = !entered.is_empty();
+    let submit = move || {
+        let entered = name().trim().to_string();
+        if !entered.is_empty() {
+            on_submit.call(entered);
+        }
+    };
+
+    rsx! {
+        input {
+            class: "lobby-name",
+            value: "{name}",
+            placeholder: "Your name",
+            autofocus: true,
+            oninput: move |event| name.set(event.value()),
+            onkeydown: move |event| {
+                if event.key() == Key::Enter {
+                    submit();
+                }
+            },
+        }
+        button {
+            class: "primary",
+            disabled: !ready,
+            onclick: move |_| submit(),
+            "{action}"
+        }
+    }
+}
+
+/// Host settings: who you are, and how many seats the bots take before anyone
+/// joins. The api seeds the room with them; the rest stay open for humans.
+#[component]
+fn HostSettings(on_create: EventHandler<(String, usize)>) -> Element {
+    let mut name = use_signal(String::new);
     let mut bots = use_signal(|| 0usize);
     let chosen = bots();
     let choices: Vec<(usize, &'static str)> = (0..=3)
@@ -227,8 +279,18 @@ fn HostSettings(on_create: EventHandler<usize>) -> Element {
             )
         })
         .collect();
+    let open = 3 - chosen;
+    let entered = name().trim().to_string();
+    let ready = !entered.is_empty();
 
     rsx! {
+        input {
+            class: "lobby-name",
+            value: "{name}",
+            placeholder: "Your name",
+            autofocus: true,
+            oninput: move |event| name.set(event.value()),
+        }
         div { class: "field",
             span { class: "field-label", "Bots at the table" }
             div { class: "choices",
@@ -242,34 +304,172 @@ fn HostSettings(on_create: EventHandler<usize>) -> Element {
                 }
             }
         }
-        p { class: "muted", "You take a seat yourself; bots fill {chosen} of the other three, and players take the rest." }
-        button { class: "primary", onclick: move |_| on_create.call(chosen), "Create room" }
+        p { class: "muted",
+            if open == 0 {
+                "You and three bots: the game starts the moment you sit down."
+            } else {
+                "You, {chosen} bot(s), and {open} seat(s) for other players. The game starts once the table is full."
+            }
+        }
+        button {
+            class: "primary",
+            disabled: !ready,
+            onclick: move |_| {
+                let entered = name().trim().to_string();
+                if !entered.is_empty() {
+                    on_create.call((entered, chosen));
+                }
+            },
+            "Open the room"
+        }
     }
 }
 
+/// Opens a room and shows its number, which is the thing to pass on to whoever
+/// is playing. On a local network it first starts this machine's own server —
+/// so the app carries the api rather than depending on one already running —
+/// and also shows the address peers reach it at. Sitting down is a separate
+/// step so the number and address can be read and shared first.
 #[component]
-fn CodeEntry(on_join: EventHandler<String>) -> Element {
+fn HostRoom(
+    lan: bool,
+    name: String,
+    bots: usize,
+    on_seat: EventHandler<(String, Server, usize)>,
+) -> Element {
+    // Holds the server too, since a LAN host learns its own address only once
+    // the embedded api has bound a port.
+    let mut room = use_signal(|| None::<Result<(Server, usize), String>>);
+
+    use_future(move || async move {
+        // Internet play talks to the compiled-in api; a LAN host runs its own
+        // in this process, then opens the room on it.
+        let server = if lan {
+            match crate::game::start_lan_host() {
+                Ok(server) => server,
+                Err(error) => return room.set(Some(Err(error))),
+            }
+        } else {
+            Server::internet()
+        };
+        let opened = match net::create_room(&server, bots).await {
+            Ok(number) => Ok((server, number)),
+            Err(error) => Err(error),
+        };
+        room.set(Some(opened));
+    });
+
+    match room() {
+        None => rsx! {
+            p { class: "muted", "Opening a room…" }
+        },
+        Some(Err(error)) => rsx! {
+            p { class: "muted", "{error}" }
+        },
+        Some(Ok((server, number))) => rsx! {
+            div { class: "room-code",
+                span { class: "room-code-label", "Room number" }
+                span { class: "room-code-value open", "{number}" }
+            }
+            if lan {
+                div { class: "room-code",
+                    span { class: "room-code-label", "This machine" }
+                    span { class: "room-code-address", "{server.address()}" }
+                }
+                p { class: "muted", "Players on this network need both: the address to reach you, and the room number." }
+            } else if bots == 3 {
+                p { class: "muted", "The table is full once you sit down." }
+            } else {
+                p { class: "muted", "Share the room number with whoever is playing. The game starts once the table is full." }
+            }
+            button {
+                class: "primary",
+                onclick: move |_| on_seat.call((name.clone(), server.clone(), number)),
+                "Take your seat"
+            }
+        },
+    }
+}
+
+/// Your name, the room number, and — joining over a local network — the address
+/// the host read off their screen.
+#[component]
+fn JoinForm(ask_for_address: bool, on_join: EventHandler<(String, Server, usize)>) -> Element {
+    let mut name = use_signal(String::new);
+    let mut address = use_signal(String::new);
     let mut code = use_signal(String::new);
-    let submit = move || {
-        let entered = code().trim().to_string();
-        if !entered.is_empty() {
-            on_join.call(entered);
+    let mut error = use_signal(String::new);
+
+    let ready = !name().trim().is_empty();
+
+    let mut submit = move || {
+        let who = name().trim().to_string();
+        if who.is_empty() {
+            return;
         }
+
+        let server = if ask_for_address {
+            match Server::parse(&address()) {
+                Ok(server) => server,
+                Err(problem) => {
+                    error.set(problem);
+                    return;
+                }
+            }
+        } else {
+            Server::internet()
+        };
+
+        let Ok(room) = code().trim().parse::<usize>() else {
+            error.set("A room number is digits only — check what the host sent you.".to_string());
+            return;
+        };
+
+        on_join.call((who, server, room));
     };
 
     rsx! {
         input {
             class: "lobby-name",
+            value: "{name}",
+            placeholder: "Your name",
+            oninput: move |event| name.set(event.value()),
+        }
+        if ask_for_address {
+            input {
+                class: "lobby-name",
+                value: "{address}",
+                placeholder: "Host address, e.g. 192.168.1.5:3000",
+                autofocus: true,
+                oninput: move |event| {
+                    error.set(String::new());
+                    address.set(event.value());
+                },
+            }
+        }
+        input {
+            class: "lobby-name",
             value: "{code}",
             placeholder: "Room number",
-            autofocus: true,
-            oninput: move |event| code.set(event.value()),
+            autofocus: !ask_for_address,
+            oninput: move |event| {
+                error.set(String::new());
+                code.set(event.value());
+            },
             onkeydown: move |event| {
                 if event.key() == Key::Enter {
                     submit();
                 }
             },
         }
-        button { class: "primary", onclick: move |_| submit(), "Join" }
+        if !error().is_empty() {
+            p { class: "muted", "{error}" }
+        }
+        button {
+            class: "primary",
+            disabled: !ready,
+            onclick: move |_| submit(),
+            "Take your seat"
+        }
     }
 }

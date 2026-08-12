@@ -1,37 +1,20 @@
-mod bot;
-mod human;
+//! A seat is anything that implements [`Strategy`]. The [`strategy`] module
+//! carries the ones the crate ships with; [`Remote`] is a seat played from
+//! outside the process, over a [`Transport`]. Extend by writing a `Strategy`,
+//! not by editing this module.
+//!
+//! TODO: (public strategy/simulation API, deferred):
+//!   1. `Host::run` should return scores/winner; move scoring into the engine.
+//!   2. Seeded deck (`Host::with_seed`) for reproducible deals.
+//!   3. `Remote` should bound how long a client may take over a turn, and give
+//!      the seat away to its fallback once that runs out.
+
+mod remote;
+pub mod strategy;
+mod transport;
 mod view;
 
-use crate::game::{Call, Card};
-pub use bot::Bot;
-pub use human::Human;
-pub use human::Transport;
-pub use view::{Action, ClientMessage, ServerMessage};
-pub use view::{Game, Round};
-
-#[derive(Debug)]
-pub enum AgentKind {
-    Bot(Bot),
-    Human(Human),
-}
-
-impl AgentKind {
-    pub(crate) fn call(&mut self, view: &Game) -> Call {
-        match self {
-            Self::Bot(bot) => bot.call(view),
-            Self::Human(human) => human.call(view),
-        }
-    }
-
-    pub(crate) fn play(&mut self, view: &Game) -> Card {
-        match self {
-            Self::Bot(bot) => bot.play(view),
-            Self::Human(human) => human.play(view),
-        }
-    }
-
-    // TODO: potentially important to send the periodic update to the user
-    // particularly if it is a multi-player setup where each player waiting some time for each
-    // player to make her move.
-    // pub(crate) fn update(&self, view: &PlayerView);
-}
+pub use remote::Remote;
+pub use strategy::Strategy;
+pub use transport::Transport;
+pub use view::{Action, ClientMessage, Game, LegalMove, LegalMoves, Round, ServerMessage};

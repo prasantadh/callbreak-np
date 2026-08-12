@@ -2,35 +2,29 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Error {
-    // Call Errors
+    // Call
     CallValueTooLarge,
     CallValueTooSmall,
-    // Hand Errors
-    HandIsFull,
-    HandHasCardAlready,
-    HandDoesNotHaveThisCard,
-    RequiresFaceCard,
-    RequiresSpades,
-    Not13Cards,
-    HasDuplicateCards,
-    // Round Errors
+    // Hand: the first four reject a deal, the last a card it does not hold
+    HandHasNoFaceCard,
+    HandHasNoSpade,
+    HandIsNotThirteenCards,
+    HandHasDuplicateCards,
+    CardNotInHand,
+    // Round
     RoundIsOver,
-    // Trick Errors
-    InvalidPlay,
-    // Turn Errors
+    CardNotPlayable,
+    // Game and Round
     NotYourTurn,
-    // Game Errors,
-    NotAcceptingNewPlayers,
     NotAcceptingCalls,
-    NotAcceptingPlay,
-    PlayerAlreadyInGame,
-    PlayerNotInGame,
-    RoundIsNotOver,
-    RoundNotInProgress,
-    // Agent Error
-    AgentSend,
-    AgentRecv,
-    NotTheSolicitedResponse,
+    NotAcceptingPlays,
+    // Host
+    TableNotFull,
+    TableIsFull,
+    NameAlreadyTaken,
+    /// A broken engine invariant — a bug, not a recoverable condition. The
+    /// `&'static str` is a breadcrumb for the report.
+    Internal(&'static str),
 }
 
 impl std::error::Error for Error {}

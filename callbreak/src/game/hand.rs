@@ -8,21 +8,19 @@ use std::{collections::HashSet, fmt::Display};
 pub struct Hand(Vec<Card>);
 
 impl Hand {
-    pub(crate) fn filter<P>(&self, mut predicate: P) -> impl Iterator<Item = &Card>
+    pub fn filter<P>(&self, mut predicate: P) -> impl Iterator<Item = &Card>
     where
         P: FnMut(&Card) -> bool,
     {
         self.0.iter().filter(move |card| predicate(card))
     }
 
-    pub(crate) fn play(&mut self, card: Card) -> Result<()> {
-        let idx = self.0.iter().position(|v| *v == card);
-        if let Some(idx) = idx {
-            self.0.remove(idx);
-            Ok(())
-        } else {
-            Err(Error::HandDoesNotHaveThisCard)
-        }
+    pub fn play(&mut self, card: Card) -> Result<Card> {
+        self.0
+            .iter()
+            .position(|&v| v == card)
+            .map(|v| Ok(self.0.swap_remove(v)))
+            .ok_or(Error::CardNotInHand)?
     }
 }
 
@@ -38,13 +36,13 @@ impl TryFrom<&[Card]> for Hand {
         let mut cards = cards.to_vec();
         cards.sort();
         if !has_face {
-            Err(Error::RequiresFaceCard)
+            Err(Error::HandHasNoFaceCard)
         } else if !has_spades {
-            Err(Error::RequiresSpades)
+            Err(Error::HandHasNoSpade)
         } else if cards.len() != 13 {
-            Err(Error::Not13Cards)
+            Err(Error::HandIsNotThirteenCards)
         } else if HashSet::<&Card>::from_iter(cards.iter()).len() != 13 {
-            Err(Error::HasDuplicateCards)
+            Err(Error::HandHasDuplicateCards)
         } else {
             Ok(Self(cards)) // TODO: sort the vector here by suit then rank?
         }

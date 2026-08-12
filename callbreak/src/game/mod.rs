@@ -10,199 +10,82 @@ use deck::Deck;
 pub use deck::{Card, Rank, Suit};
 pub use hand::Hand;
 pub use trick::Trick;
+pub use turn::Turn;
 
-use crate::agent::{Game as GameView, Round as RoundView};
 use crate::{Error, Result};
-use rand::{rng, seq::SliceRandom};
-use round::Round;
+pub(crate) use round::Round;
 use serde::Serialize;
-use tracing::debug;
-use turn::Turn;
+use std::array;
 
-type Player = String;
+const ROUNDS: usize = 5;
 
-#[derive(Debug, Default, Clone, Serialize)]
+/// Who is sitting where is the [`Host`](crate::Host)'s business: the engine
+/// deals in seats, so it never needs a name and cannot disagree with the host
+/// about which name belongs to which seat.
+#[derive(Debug, Clone, Serialize)]
 pub(crate) struct Game {
-    players: [Option<Player>; 4],
-    rounds: [Option<Round>; 5],
+    rounds: [Option<Round>; ROUNDS],
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum State {
-    Lobby,
-    RoundInProgress,
-    Over,
+impl Default for Game {
+    /// There is no un-started `Game`: the host is what knows when four people
+    /// are seated, so "the match has not begun" is not a state the engine can
+    /// be asked about — or forget to check for.
+    fn default() -> Self {
+        let mut game = Self {
+            rounds: array::from_fn(|_| None),
+        };
+        game.deal_next();
+        game
+    }
 }
 
 impl Game {
-    fn state(&self) -> State {
-        if self.players.iter().any(|v| v.as_ref().is_none()) {
-            State::Lobby
-        } else if self
-            .rounds
-            .iter()
-            .all(|round| round.as_ref().is_some_and(|v| v.is_over()))
-        {
-            State::Over
-        } else {
-            State::RoundInProgress
+    /// Round `i` is led by seat `i`, so the slot a round lands in is also who
+    /// starts it. No free slot means no round left to deal.
+    fn deal_next(&mut self) {
+        if let Some(slot) = self.rounds.iter().position(Option::is_none) {
+            self.rounds[slot] = Some(Round::new(Turn::new(slot)));
         }
     }
 
-    pub(crate) fn add_player(&mut self, id: &str) -> Result<()> {
-        match self.state() {
-            State::Lobby => {
-                if self.players.iter().flatten().any(|player| player == id) {
-                    Err(Error::PlayerAlreadyInGame)
-                } else {
-                    self.players
-                        .iter_mut()
-                        .find(|slot| slot.is_none())
-                        .expect("an empty slot is expected in the Lobby")
-                        .replace(id.to_string());
-                    if self.state() == State::RoundInProgress {
-                        let mut rng = rng();
-                        self.players.shuffle(&mut rng);
-                        self.rounds[0] = Some(Round::new(Turn::new(0)));
-                        let players: Vec<String> = self
-                            .players
-                            .iter()
-                            .flatten()
-                            .map(|p| p.to_string())
-                            .collect();
-                        debug!(?players, "players order after shuffle for the game");
-                    }
-                    Ok(())
-                }
-            }
-            _ => Err(Error::NotAcceptingNewPlayers),
+    /// At most one round is ever unfinished: they are dealt in order, and the
+    /// next only once the current one ends. Holding the `Some` is what proves
+    /// the match is still running, so nothing below asserts it again.
+    fn active_round(&self) -> Option<&Round> {
+        self.rounds.iter().flatten().find(|round| !round.is_over())
+    }
+
+    fn active_round_mut(&mut self) -> Option<&mut Round> {
+        self.rounds
+            .iter_mut()
+            .flatten()
+            .find(|round| !round.is_over())
+    }
+
+    pub(crate) fn call(&mut self, turn: Turn, call: Call) -> Result<()> {
+        self.active_round_mut()
+            .ok_or(Error::NotAcceptingCalls)?
+            .call(call, turn)
+    }
+
+    pub(crate) fn play(&mut self, turn: Turn, card: Card) -> Result<()> {
+        let round = self.active_round_mut().ok_or(Error::NotAcceptingPlays)?;
+        round.play(card, turn)?;
+        if round.is_over() {
+            self.deal_next();
         }
+        Ok(())
     }
 
-    fn player_id_to_turn(&self, player_id: &str) -> Result<Turn> {
-        match self.state() {
-            State::RoundInProgress => {
-                if let Some(turn) = self
-                    .players
-                    .iter()
-                    .flatten()
-                    .position(|player| player == player_id)
-                {
-                    Ok(Turn::new(turn))
-                } else {
-                    Err(Error::PlayerNotInGame)
-                }
-            }
-            _ => Err(Error::NotYourTurn),
-        }
+    pub(crate) fn turn(&self) -> Result<Turn> {
+        self.active_round().ok_or(Error::NotYourTurn)?.turn()
     }
 
-    pub(crate) fn call(&mut self, player_id: &str, call: Call) -> Result<()> {
-        match self.state() {
-            State::RoundInProgress => {
-                let turn = self.player_id_to_turn(player_id)?;
-                self.rounds
-                    .iter_mut()
-                    .rev()
-                    .find_map(|v| v.as_mut())
-                    .expect("must have an active round in this state")
-                    .call(call, turn)
-            }
-            _ => Err(Error::NotAcceptingCalls),
-        }
-    }
-
-    pub(crate) fn play(&mut self, player_id: &str, card: Card) -> Result<()> {
-        match self.state() {
-            State::RoundInProgress => {
-                let turn = self.player_id_to_turn(player_id)?;
-                let slot = self
-                    .rounds
-                    .iter()
-                    .position(|r| r.as_ref().is_some_and(|r| !r.is_over()))
-                    .expect("must have an active round in this state");
-                self.rounds[slot]
-                    .as_mut()
-                    .expect("must have an active round in this state")
-                    .play(card, turn)?;
-                if slot != 4 && self.rounds[slot].as_ref().unwrap().is_over() {
-                    self.rounds[slot + 1] = Some(Round::new(Turn::new(slot + 1)));
-                }
-                Ok(())
-            }
-            _ => Err(Error::NotAcceptingPlay),
-        }
-    }
-
-    pub(crate) fn turn(&self) -> Result<String> {
-        match self.state() {
-            State::RoundInProgress => {
-                let turn = self
-                    .rounds
-                    .iter()
-                    .rev()
-                    .find_map(|r| r.as_ref())
-                    .expect("must always have Some(round)")
-                    .turn()?;
-                Ok(self.players[turn]
-                    .as_ref()
-                    .expect("must have all players in this state")
-                    .to_string())
-            }
-            _ => Err(Error::NotYourTurn),
-        }
-    }
-
-    pub(crate) fn get_valid_moves(&self, player: &str) -> Result<Vec<Card>> {
-        match self.state() {
-            State::RoundInProgress => {
-                let turn = self.player_id_to_turn(player)?;
-                self.rounds
-                    .iter()
-                    .rev()
-                    .find_map(|r| r.as_ref())
-                    .expect("must always have Some(round)")
-                    .get_valid_moves(turn)
-            }
-            _ => Err(Error::NotAcceptingPlay),
-        }
-    }
-
-    pub(crate) fn is_ready(&self) -> bool {
-        self.state() == State::RoundInProgress
-    }
-
-    pub(crate) fn is_over(&self) -> bool {
-        self.state() == State::Over
-    }
-
-    pub(crate) fn build_view_for(&self, player: &Player) -> Result<GameView> {
-        match self.state() {
-            State::Lobby => Ok(GameView {
-                players: self.players.iter().flatten().cloned().collect(),
-                rounds: vec![],
-            }),
-            _ => {
-                // there is more to do here
-                let mut rounds = vec![];
-                for round in self.rounds.iter().flatten() {
-                    let roundview = RoundView {
-                        calls: *round.get_calls(),
-                        hand: round
-                            .get_hand(self.player_id_to_turn(player)?)
-                            .filter(|_| true)
-                            .cloned()
-                            .collect(),
-                        tricks: round.get_tricks().iter().flatten().cloned().collect(),
-                    };
-                    rounds.push(roundview);
-                }
-                Ok(GameView {
-                    players: self.players.iter().flatten().cloned().collect(),
-                    rounds,
-                })
-            }
-        }
+    /// Every round dealt so far, oldest first. What a seat is allowed to see of
+    /// one is the caller's decision, not the engine's.
+    pub(crate) fn rounds(&self) -> impl Iterator<Item = &Round> {
+        self.rounds.iter().flatten()
     }
 }
 
@@ -212,85 +95,51 @@ mod test {
     use crate::game::Rank::*;
     use crate::game::Suit::*;
 
+    fn legal_card(game: &Game, seat: Turn) -> Card {
+        *game
+            .active_round()
+            .expect("the match is running")
+            .get_valid_moves(seat)
+            .expect("the seat to act has moves")
+            .first()
+            .expect("the legal set is never empty")
+    }
+
     #[test]
     fn can_play_to_completion() {
         let mut game = Game::default();
 
-        for turn in 0..4 {
-            game.add_player(turn.to_string().as_str()).unwrap();
-        }
-
         for _round in 0..5 {
             for _turn in 0..4 {
-                let player = game.turn().unwrap();
-                game.call(&player, Call::new(3).unwrap()).unwrap();
+                let seat = game.turn().unwrap();
+                game.call(seat, Call::new(3).unwrap()).unwrap();
             }
             for _trick in 0..13 {
                 for _turn in 0..4 {
-                    let player = game.turn().unwrap();
-                    let moves = game.get_valid_moves(&player).unwrap();
-                    game.play(&player, *moves.first().unwrap()).unwrap();
+                    let seat = game.turn().unwrap();
+                    game.play(seat, legal_card(&game, seat)).unwrap();
                 }
             }
         }
     }
 
-    #[test]
-    fn cannot_add_same_player_twice() {
-        let mut game = Game::default();
-        game.add_player("0").unwrap();
-        let action = game.add_player("0");
-        assert_eq!(action, Err(Error::PlayerAlreadyInGame))
-    }
-
-    #[test]
-    fn cannot_add_more_than_four_players() {
-        let mut game = Game::default();
-        for i in 0..4 {
-            game.add_player(&i.to_string()).unwrap();
-        }
-        let action = game.add_player("0");
-        assert_eq!(action, Err(Error::NotAcceptingNewPlayers))
-    }
-
-    #[test]
-    fn cannot_call_before_all_players_have_joined() {
-        let mut game = Game::default();
-        game.add_player("0").unwrap();
-        let action = game.call("0", Call::new(3).unwrap());
-        assert_eq!(action, Err(Error::NotAcceptingCalls))
-    }
+    // Nothing tests that a match rejects a call or a play before it starts:
+    // `Game::default` deals, so there is no un-started game to try it on.
 
     #[test]
     fn cannot_call_out_of_turn() {
         let mut game = Game::default();
-        for i in 0..4 {
-            game.add_player(i.to_string().as_str()).unwrap();
-        }
-        let player = game.turn().unwrap();
-        let action = match player.as_str() {
-            "1" => game.call("2", Call::new(3).unwrap()),
-            _ => game.call("1", Call::new(3).unwrap()),
-        };
-        assert_eq!(action, Err(Error::NotYourTurn));
-    }
-
-    #[test]
-    fn cannot_play_while_in_lobby() {
-        let mut game = Game::default();
-        for i in 0..3 {
-            game.add_player(&i.to_string()).unwrap();
-        }
-        let action = game.play("0", Card::new(Seven, Clubs));
-        assert_eq!(action, Err(Error::NotAcceptingPlay))
+        // Any seat but the one to act.
+        let next = game.turn().unwrap().next();
+        assert_eq!(
+            game.call(next, Call::new(3).unwrap()),
+            Err(Error::NotYourTurn)
+        );
     }
 
     #[test]
     fn each_player_has_a_spade_card_and_a_face_card() {
         let mut game = Game::default();
-        for i in 0..4 {
-            game.add_player(&i.to_string()).unwrap();
-        }
         let round = game.rounds[0].as_mut().unwrap();
         for i in 0..4 {
             assert!(
@@ -312,29 +161,25 @@ mod test {
     fn round_i_must_be_started_by_turn_i() {
         let mut game = Game::default();
 
-        for turn in 0..4 {
-            game.add_player(turn.to_string().as_str()).unwrap();
-        }
-        let players: Vec<String> = game.players.iter().flatten().cloned().collect();
-
         for round in 0..5 {
-            for turn in 0..4 {
-                let mut player = game.turn().unwrap();
-                if turn == 0 {
-                    // starter must be player i for Round i
-                    player = players[Turn::new(round)].clone();
-                }
-                game.call(&player, Call::new(3).unwrap()).unwrap();
+            assert_eq!(
+                game.turn().unwrap(),
+                Turn::new(round),
+                "round {round} must be called first by seat {round}"
+            );
+            for _turn in 0..4 {
+                let seat = game.turn().unwrap();
+                game.call(seat, Call::new(3).unwrap()).unwrap();
             }
-            for trick in 0..13 {
-                for turn in 0..4 {
-                    let mut player = game.turn().unwrap();
-                    if (trick, turn) == (0, 0) {
-                        // starter must be player i for Round i
-                        player = players[Turn::new(round)].clone();
-                    };
-                    let moves = game.get_valid_moves(&player).unwrap();
-                    game.play(&player, *moves.first().unwrap()).unwrap();
+            assert_eq!(
+                game.turn().unwrap(),
+                Turn::new(round),
+                "round {round} must be led by seat {round}"
+            );
+            for _trick in 0..13 {
+                for _turn in 0..4 {
+                    let seat = game.turn().unwrap();
+                    game.play(seat, legal_card(&game, seat)).unwrap();
                 }
             }
         }
@@ -343,16 +188,15 @@ mod test {
     #[test]
     fn cannot_play_out_of_turn() {
         let mut game = Game::default();
-        for turn in 0..4 {
-            game.add_player(turn.to_string().as_str()).unwrap();
-        }
         for _ in 0..4 {
-            let player = game.turn().unwrap();
-            game.call(&player, Call::new(3).unwrap()).unwrap();
+            let seat = game.turn().unwrap();
+            game.call(seat, Call::new(3).unwrap()).unwrap();
         }
-        let players: Vec<String> = game.players.iter().flatten().cloned().collect();
-        let action = game.play(&players[1], Card::new(Six, Diamonds));
-        // ^ what card is used doesn't really matter
-        assert_eq!(action, Err(Error::NotYourTurn));
+        // Any seat but the one to act; what card is used doesn't matter.
+        let next = game.turn().unwrap().next();
+        assert_eq!(
+            game.play(next, Card::new(Six, Diamonds)),
+            Err(Error::NotYourTurn)
+        );
     }
 }
